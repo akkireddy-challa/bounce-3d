@@ -282,19 +282,27 @@ export class BounceCourseManager {
     }
 
     /**
-     * Builds floating islands, clouds, and environment props with solid Rapier physics colliders
+     * Builds floating islands, rolling low-poly mounds, cobblestone pathways, faceted trees,
+     * boulders, flower patches, distant horizon mountains, and clouds matching wallpaper reference
      */
     private buildWorldScenery(): void {
         const RAPIER = getRapier();
 
+        // 0. Atmospheric Lighting matching the vibrant wallpaper
+        const sunLight = new THREE.DirectionalLight(0xFFFBEB, 1.4);
+        sunLight.position.set(25, 45, 20);
+        sunLight.castShadow = true;
+        this.scene.add(sunLight);
+
+        const skyAmbient = new THREE.AmbientLight(0xBAE6FD, 0.75);
+        this.scene.add(skyAmbient);
+
         // 1. Elevated Floating Islands in a Wide Platformer Vista
-        // Tier 1 (Spawn Center) -> Tier 2 (Azure Wide Right: X=+10.5) -> Tier 3 (Amethyst Wide Left: X=-10.5) -> Tier 4 (Golden Citadel Center: Z=-42)
-        // Broad lateral spacing ensures 100% depth separation with ZERO overlapping platforms
         const islandConfigs = [
             { pos: new THREE.Vector3(0, 3.5, -1.0), radius: 6.5, color: 0x10B981, rimColor: 0xFBBF24 },       // Tier 1: Emerald Spawn Island
-            { pos: new THREE.Vector3(10.5, 4.6, -17.0), radius: 5.2, color: 0x0284C7, rimColor: 0x38BDF8 },  // Tier 2: Azure Sky Terrace (wide right)
-            { pos: new THREE.Vector3(-10.5, 6.2, -29.0), radius: 5.2, color: 0x7C3AED, rimColor: 0xC084FC }, // Tier 3: Amethyst Pinnacle (wide left)
-            { pos: new THREE.Vector3(0, 8.0, -42.0), radius: 7.2, color: 0xD97706, rimColor: 0xF59E0B },     // Tier 4: Golden Victory Citadel (distant center)
+            { pos: new THREE.Vector3(10.5, 4.6, -17.0), radius: 5.2, color: 0x0284C7, rimColor: 0x38BDF8 },  // Tier 2: Azure Sky Terrace
+            { pos: new THREE.Vector3(-10.5, 6.2, -29.0), radius: 5.2, color: 0x7C3AED, rimColor: 0xC084FC }, // Tier 3: Amethyst Pinnacle
+            { pos: new THREE.Vector3(0, 8.0, -42.0), radius: 7.2, color: 0xD97706, rimColor: 0xF59E0B },     // Tier 4: Golden Victory Citadel
         ];
 
         islandConfigs.forEach((cfg) => {
@@ -306,7 +314,8 @@ export class BounceCourseManager {
             const topMat = new THREE.MeshStandardMaterial({
                 color: cfg.color,
                 roughness: 0.4,
-                metalness: 0.1
+                metalness: 0.1,
+                flatShading: true
             });
             const topMesh = new THREE.Mesh(topGeo, topMat);
             topMesh.position.y = 0.25;
@@ -317,7 +326,8 @@ export class BounceCourseManager {
             const innerGrassGeo = new THREE.CylinderGeometry(cfg.radius * 0.92, cfg.radius * 0.92, 0.52, 28);
             const innerGrassMat = new THREE.MeshStandardMaterial({
                 color: 0x047857,
-                roughness: 0.5
+                roughness: 0.5,
+                flatShading: true
             });
             const innerGrassMesh = new THREE.Mesh(innerGrassGeo, innerGrassMat);
             innerGrassMesh.position.y = 0.25;
@@ -335,7 +345,7 @@ export class BounceCourseManager {
             cliffMesh.position.y = -0.25;
             island.add(cliffMesh);
 
-            // Shallow stone underside disc (replaces dark giant cone, keeping sky bright & clear!)
+            // Shallow stone underside disc
             const baseGeo = new THREE.CylinderGeometry(cfg.radius * 0.85, cfg.radius * 0.5, 0.8, 16);
             const baseMat = new THREE.MeshStandardMaterial({
                 color: 0x475569, // Slate stone
@@ -364,7 +374,7 @@ export class BounceCourseManager {
             this.scene.add(island);
             this.floatingIslands.push(island);
 
-            // Add solid Rapier physics collider for this floating island
+            // Solid Rapier physics collider for island surface
             if (this.engine?.physicsWorld && RAPIER) {
                 try {
                     const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(cfg.pos.x, cfg.pos.y + 0.25, cfg.pos.z);
@@ -379,13 +389,185 @@ export class BounceCourseManager {
             }
         });
 
-        // 2. Stylized Low-Poly Fluffy Clouds in the Azure Sky
+        // 2. Rolling Low-Poly Grassy Mounds on Islands (Wallpaper Contour)
+        const moundConfigs = [
+            // Spawn Island mounds
+            { pos: new THREE.Vector3(-3.8, 3.8, 3.2), scale: new THREE.Vector3(2.2, 0.8, 2.0), color: 0x22C55E },
+            { pos: new THREE.Vector3(3.8, 3.8, 3.0), scale: new THREE.Vector3(2.0, 0.7, 1.8), color: 0x16A34A },
+            { pos: new THREE.Vector3(-4.6, 3.8, -1.0), scale: new THREE.Vector3(1.8, 0.6, 1.8), color: 0x4ADE80 },
+            // Azure Terrace mounds
+            { pos: new THREE.Vector3(14.0, 4.9, -17.5), scale: new THREE.Vector3(1.8, 0.7, 1.8), color: 0x0284C7 },
+            { pos: new THREE.Vector3(12.0, 4.9, -13.0), scale: new THREE.Vector3(1.6, 0.6, 1.6), color: 0x38BDF8 },
+            // Amethyst Pinnacle mounds
+            { pos: new THREE.Vector3(-14.0, 6.5, -29.5), scale: new THREE.Vector3(1.8, 0.7, 1.8), color: 0x7C3AED },
+            { pos: new THREE.Vector3(-12.5, 6.5, -26.0), scale: new THREE.Vector3(1.6, 0.6, 1.6), color: 0xA855F7 },
+            // Golden Citadel mounds
+            { pos: new THREE.Vector3(-5.2, 8.3, -43.0), scale: new THREE.Vector3(2.4, 0.9, 2.2), color: 0xD97706 },
+            { pos: new THREE.Vector3(5.2, 8.3, -43.0), scale: new THREE.Vector3(2.4, 0.9, 2.2), color: 0xF59E0B },
+        ];
+
+        moundConfigs.forEach(mc => {
+            const moundGeo = new THREE.DodecahedronGeometry(1.0, 1);
+            const moundMat = new THREE.MeshStandardMaterial({
+                color: mc.color,
+                roughness: 0.5,
+                flatShading: true
+            });
+            const mound = new THREE.Mesh(moundGeo, moundMat);
+            mound.position.copy(mc.pos);
+            mound.scale.copy(mc.scale);
+            mound.receiveShadow = true;
+            this.scene.add(mound);
+        });
+
+        // 3. Faceted Low-Poly Trees (Pine Cones & Round Geometric Canopies)
+        const treeConfigs = [
+            // Spawn Island Trees (rim positions framing the cinematic course)
+            { pos: new THREE.Vector3(-4.6, 4.0, 3.2), type: 'pine' as const, scale: 1.1 },
+            { pos: new THREE.Vector3(4.4, 4.0, 3.2), type: 'round' as const, scale: 1.05 },
+            { pos: new THREE.Vector3(-5.5, 4.0, 0.0), type: 'round' as const, scale: 1.0 },
+            { pos: new THREE.Vector3(5.5, 4.0, -1.2), type: 'pine' as const, scale: 1.15 },
+            { pos: new THREE.Vector3(5.0, 4.0, -4.2), type: 'round' as const, scale: 0.95 },
+            { pos: new THREE.Vector3(-4.8, 4.0, -3.5), type: 'pine' as const, scale: 1.0 },
+
+            // Azure Terrace Trees
+            { pos: new THREE.Vector3(14.5, 5.1, -17.0), type: 'pine' as const, scale: 1.2 },
+            { pos: new THREE.Vector3(13.8, 5.1, -20.5), type: 'round' as const, scale: 1.1 },
+            { pos: new THREE.Vector3(13.2, 5.1, -13.0), type: 'pine' as const, scale: 1.05 },
+
+            // Amethyst Pinnacle Trees
+            { pos: new THREE.Vector3(-14.8, 6.7, -29.0), type: 'pine' as const, scale: 1.25 },
+            { pos: new THREE.Vector3(-14.0, 6.7, -32.5), type: 'round' as const, scale: 1.15 },
+            { pos: new THREE.Vector3(-13.2, 6.7, -25.5), type: 'pine' as const, scale: 1.1 },
+
+            // Golden Citadel Portal Guardian Trees
+            { pos: new THREE.Vector3(-5.8, 8.5, -40.0), type: 'pine' as const, scale: 1.4 },
+            { pos: new THREE.Vector3(5.8, 8.5, -40.0), type: 'pine' as const, scale: 1.4 },
+            { pos: new THREE.Vector3(-5.2, 8.5, -45.5), type: 'round' as const, scale: 1.3 },
+            { pos: new THREE.Vector3(5.2, 8.5, -45.5), type: 'round' as const, scale: 1.3 },
+        ];
+
+        treeConfigs.forEach(tc => {
+            const tree = this.createLowPolyTree(tc.type, tc.scale);
+            tree.position.copy(tc.pos);
+            this.scene.add(tree);
+        });
+
+        // 4. Low-Poly Boulders & Rocks (voxelRock2 Wallpaper Style)
+        const rockConfigs = [
+            // Spawn Island boulders
+            { pos: new THREE.Vector3(-3.2, 4.0, 2.2), scale: new THREE.Vector3(0.7, 0.5, 0.6), color: 0x94A3B8 },
+            { pos: new THREE.Vector3(4.2, 4.0, 1.8), scale: new THREE.Vector3(0.9, 0.6, 0.7), color: 0x64748B },
+            { pos: new THREE.Vector3(-4.0, 4.0, -2.8), scale: new THREE.Vector3(0.8, 0.5, 0.8), color: 0x475569 },
+            { pos: new THREE.Vector3(3.5, 4.0, -4.5), scale: new THREE.Vector3(0.6, 0.4, 0.5), color: 0x94A3B8 },
+
+            // Azure Terrace boulders (accompanying hazard spikes)
+            { pos: new THREE.Vector3(13.8, 5.1, -15.5), scale: new THREE.Vector3(0.8, 0.5, 0.7), color: 0x64748B },
+            { pos: new THREE.Vector3(11.5, 5.1, -14.0), scale: new THREE.Vector3(0.7, 0.5, 0.6), color: 0x475569 },
+
+            // Amethyst Pinnacle boulders
+            { pos: new THREE.Vector3(-13.8, 6.7, -27.0), scale: new THREE.Vector3(0.8, 0.6, 0.7), color: 0x64748B },
+            { pos: new THREE.Vector3(-11.5, 6.7, -25.5), scale: new THREE.Vector3(0.6, 0.4, 0.5), color: 0x94A3B8 },
+
+            // Golden Citadel boulders
+            { pos: new THREE.Vector3(-4.0, 8.5, -39.0), scale: new THREE.Vector3(1.0, 0.7, 0.8), color: 0x64748B },
+            { pos: new THREE.Vector3(4.0, 8.5, -39.0), scale: new THREE.Vector3(1.0, 0.7, 0.8), color: 0x64748B },
+            { pos: new THREE.Vector3(0, 8.5, -46.5), scale: new THREE.Vector3(1.2, 0.8, 0.9), color: 0x475569 },
+        ];
+
+        rockConfigs.forEach(rc => {
+            const rock = this.createLowPolyRock(rc.scale, rc.color);
+            rock.position.copy(rc.pos);
+            this.scene.add(rock);
+        });
+
+        // 5. Stylized Dirt/Stone Pathway Tiles Winding Through Islands
+        const pathConfigs = [
+            // Spawn island pathway
+            new THREE.Vector3(0, 3.8, 1.2),
+            new THREE.Vector3(0.2, 3.8, 0.0),
+            new THREE.Vector3(0.8, 3.8, -1.5),
+            new THREE.Vector3(1.6, 3.8, -3.2),
+            new THREE.Vector3(2.2, 3.8, -4.6),
+
+            // Azure Terrace pathway
+            new THREE.Vector3(9.2, 4.9, -15.2),
+            new THREE.Vector3(10.0, 4.9, -16.8),
+            new THREE.Vector3(10.0, 4.9, -18.4),
+
+            // Amethyst Pinnacle pathway
+            new THREE.Vector3(-9.2, 6.5, -27.2),
+            new THREE.Vector3(-10.0, 6.5, -28.8),
+            new THREE.Vector3(-9.8, 6.5, -30.4),
+
+            // Golden Citadel grand promenade
+            new THREE.Vector3(0, 8.3, -37.5),
+            new THREE.Vector3(0, 8.3, -39.2),
+            new THREE.Vector3(0, 8.3, -41.0),
+        ];
+
+        const pathMat = new THREE.MeshStandardMaterial({
+            color: 0xE2E8F0, // Warm cobblestone / sandstone
+            roughness: 0.8,
+            metalness: 0.1,
+            flatShading: true
+        });
+
+        pathConfigs.forEach(p => {
+            const stepGeo = new THREE.CylinderGeometry(0.55, 0.65, 0.08, 7);
+            const step = new THREE.Mesh(stepGeo, pathMat);
+            step.position.copy(p);
+            step.rotation.y = Math.random() * Math.PI;
+            step.receiveShadow = true;
+            this.scene.add(step);
+        });
+
+        // 6. Vibrant Flower Patches on Grass
+        const flowerConfigs = [
+            new THREE.Vector3(-1.8, 3.8, 2.0),
+            new THREE.Vector3(2.2, 3.8, 1.5),
+            new THREE.Vector3(-3.2, 3.8, 0.0),
+            new THREE.Vector3(12.0, 4.9, -18.0),
+            new THREE.Vector3(-12.0, 6.5, -30.0),
+            new THREE.Vector3(-2.5, 8.3, -39.0),
+            new THREE.Vector3(2.5, 8.3, -39.0),
+        ];
+
+        flowerConfigs.forEach(fp => {
+            const patch = this.createFlowerPatch();
+            patch.position.copy(fp);
+            this.scene.add(patch);
+        });
+
+        // 7. Distant Horizon Mountain Ranges Ringing the World (Wallpaper Horizon)
+        const mountainConfigs = [
+            { pos: new THREE.Vector3(0, -10, -95), r: 35, h: 42, color: 0x334155, snow: true },
+            { pos: new THREE.Vector3(-55, -12, -85), r: 30, h: 36, color: 0x1E293B, snow: true },
+            { pos: new THREE.Vector3(55, -12, -85), r: 32, h: 38, color: 0x334155, snow: true },
+            { pos: new THREE.Vector3(-90, -14, -45), r: 28, h: 34, color: 0x166534, snow: false },
+            { pos: new THREE.Vector3(90, -14, -45), r: 30, h: 35, color: 0x15803D, snow: false },
+            { pos: new THREE.Vector3(-85, -15, 10), r: 26, h: 30, color: 0x166534, snow: false },
+            { pos: new THREE.Vector3(85, -15, 10), r: 26, h: 30, color: 0x15803D, snow: false },
+            { pos: new THREE.Vector3(0, -15, 80), r: 32, h: 36, color: 0x475569, snow: true },
+            { pos: new THREE.Vector3(-55, -15, 65), r: 28, h: 32, color: 0x334155, snow: false },
+            { pos: new THREE.Vector3(55, -15, 65), r: 28, h: 32, color: 0x334155, snow: false },
+        ];
+
+        mountainConfigs.forEach(mc => {
+            const mountain = this.createDistantMountain(mc.r, mc.h, mc.color, mc.snow);
+            mountain.position.copy(mc.pos);
+            this.scene.add(mountain);
+        });
+
+        // 8. Stylized Low-Poly Fluffy Clouds in the Azure Sky
         const cloudPositions = [
-            new THREE.Vector3(-16, 18, -10),
-            new THREE.Vector3(18, 20, -25),
-            new THREE.Vector3(-20, 22, -40),
-            new THREE.Vector3(16, 19, -50),
-            new THREE.Vector3(0, 24, -30),
+            new THREE.Vector3(-18, 22, -15),
+            new THREE.Vector3(20, 24, -28),
+            new THREE.Vector3(-22, 26, -45),
+            new THREE.Vector3(18, 23, -55),
+            new THREE.Vector3(0, 28, -35),
+            new THREE.Vector3(-30, 20, 10),
+            new THREE.Vector3(30, 21, 15),
         ];
 
         cloudPositions.forEach(cPos => {
@@ -394,17 +576,18 @@ export class BounceCourseManager {
 
             const cloudMat = new THREE.MeshStandardMaterial({
                 color: 0xFFFFFF,
-                roughness: 0.4,
+                roughness: 0.35,
                 metalness: 0.0,
                 flatShading: true
             });
 
-            // Cluster of 4 low-poly spheres
+            // Cluster of low-poly icosahedron spheres
             const puffs = [
-                { r: 2.2, x: 0, y: 0, z: 0 },
-                { r: 1.6, x: 1.8, y: -0.2, z: 0.3 },
-                { r: 1.7, x: -1.7, y: -0.1, z: -0.2 },
-                { r: 1.4, x: 0.2, y: 0.9, z: -0.4 },
+                { r: 2.8, x: 0, y: 0, z: 0 },
+                { r: 2.0, x: 2.2, y: -0.2, z: 0.4 },
+                { r: 2.1, x: -2.1, y: -0.1, z: -0.3 },
+                { r: 1.8, x: 0.3, y: 1.1, z: -0.5 },
+                { r: 1.5, x: 1.4, y: 0.9, z: 0.2 },
             ];
 
             puffs.forEach(p => {
@@ -416,6 +599,144 @@ export class BounceCourseManager {
 
             this.scene.add(cloudGroup);
         });
+    }
+
+    private createLowPolyTree(type: 'pine' | 'round', scale: number = 1.0): THREE.Group {
+        const treeGroup = new THREE.Group();
+
+        // Wooden Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.12 * scale, 0.2 * scale, 1.2 * scale, 6);
+        const trunkMat = new THREE.MeshStandardMaterial({
+            color: 0x78350F, // Warm bark brown
+            roughness: 0.9,
+            flatShading: true
+        });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 0.6 * scale;
+        trunk.castShadow = true;
+        treeGroup.add(trunk);
+
+        if (type === 'pine') {
+            // 3 Stacked Cones in Pine Greens
+            const cones = [
+                { r: 0.95 * scale, h: 1.2 * scale, y: 1.1 * scale, color: 0x15803D },
+                { r: 0.75 * scale, h: 1.0 * scale, y: 1.7 * scale, color: 0x16A34A },
+                { r: 0.52 * scale, h: 0.85 * scale, y: 2.2 * scale, color: 0x22C55E },
+            ];
+            cones.forEach(c => {
+                const coneGeo = new THREE.ConeGeometry(c.r, c.h, 5);
+                const coneMat = new THREE.MeshStandardMaterial({
+                    color: c.color,
+                    roughness: 0.6,
+                    flatShading: true
+                });
+                const cone = new THREE.Mesh(coneGeo, coneMat);
+                cone.position.y = c.y;
+                cone.castShadow = true;
+                treeGroup.add(cone);
+            });
+        } else {
+            // Round Faceted Foliage Canopy
+            const leafGeo = new THREE.DodecahedronGeometry(0.9 * scale, 0);
+            const leafMat = new THREE.MeshStandardMaterial({
+                color: 0x22C55E, // Lush meadow green
+                roughness: 0.5,
+                flatShading: true
+            });
+            const foliage = new THREE.Mesh(leafGeo, leafMat);
+            foliage.position.y = 1.5 * scale;
+            foliage.castShadow = true;
+            treeGroup.add(foliage);
+
+            // Secondary accent foliage puff
+            const leafGeo2 = new THREE.DodecahedronGeometry(0.65 * scale, 0);
+            const leafMat2 = new THREE.MeshStandardMaterial({
+                color: 0x4ADE80, // Lime accent
+                roughness: 0.5,
+                flatShading: true
+            });
+            const foliage2 = new THREE.Mesh(leafGeo2, leafMat2);
+            foliage2.position.set(0.25 * scale, 1.85 * scale, 0.15 * scale);
+            foliage2.castShadow = true;
+            treeGroup.add(foliage2);
+        }
+
+        return treeGroup;
+    }
+
+    private createLowPolyRock(scale: THREE.Vector3, color: number = 0x64748B): THREE.Mesh {
+        const rockGeo = new THREE.DodecahedronGeometry(1.0, 0);
+        const rockMat = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.85,
+            metalness: 0.15,
+            flatShading: true
+        });
+        const rock = new THREE.Mesh(rockGeo, rockMat);
+        rock.scale.copy(scale);
+        rock.rotation.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
+        rock.castShadow = true;
+        rock.receiveShadow = true;
+        return rock;
+    }
+
+    private createFlowerPatch(): THREE.Group {
+        const group = new THREE.Group();
+        const colors = [0xFACC15, 0xEF4444, 0xF97316, 0x38BDF8, 0xA855F7];
+
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const dist = 0.2 + Math.random() * 0.4;
+            const x = Math.cos(angle) * dist;
+            const z = Math.sin(angle) * dist;
+
+            // Green stem
+            const stemGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 4);
+            const stemMat = new THREE.MeshBasicMaterial({ color: 0x16A34A });
+            const stem = new THREE.Mesh(stemGeo, stemMat);
+            stem.position.set(x, 0.075, z);
+            group.add(stem);
+
+            // Flower blossom
+            const petalGeo = new THREE.OctahedronGeometry(0.06, 0);
+            const petalMat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
+            const petal = new THREE.Mesh(petalGeo, petalMat);
+            petal.position.set(x, 0.15, z);
+            group.add(petal);
+        }
+
+        return group;
+    }
+
+    private createDistantMountain(radius: number, height: number, color: number, snow: boolean): THREE.Group {
+        const group = new THREE.Group();
+
+        // Main mountain cone
+        const mountainGeo = new THREE.ConeGeometry(radius, height, 7);
+        const mountainMat = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.9,
+            metalness: 0.1,
+            flatShading: true
+        });
+        const mountain = new THREE.Mesh(mountainGeo, mountainMat);
+        mountain.position.y = height * 0.5;
+        group.add(mountain);
+
+        // Snow-capped peak
+        if (snow) {
+            const snowGeo = new THREE.ConeGeometry(radius * 0.38, height * 0.38, 7);
+            const snowMat = new THREE.MeshStandardMaterial({
+                color: 0xF8FAFC, // Snow white
+                roughness: 0.4,
+                flatShading: true
+            });
+            const snowPeak = new THREE.Mesh(snowGeo, snowMat);
+            snowPeak.position.y = height * 0.81;
+            group.add(snowPeak);
+        }
+
+        return group;
     }
 
     /**

@@ -10,9 +10,9 @@
     "skyboxUrl": "https://forged-assets.bitmagic.ai/images/0aa9152b-06b6-4f53-b4be-a4687e3d9337/image.webp",
     "fogConfig": {
       "enabled": true,
-      "color": "#4AA3FF",
-      "near": 50,
-      "far": 500
+      "color": "#BAE6FD",
+      "near": 40,
+      "far": 200
     },
     "worldSeed": 42,
     "voxelBlockSize": 1,
