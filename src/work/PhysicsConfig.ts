@@ -51,12 +51,12 @@ export interface PhysicsConstants {
  * Modify these values to change the game's physics feel
  */
 export const DEFAULT_PHYSICS: PhysicsConstants = {
-    gravity: -36.0,            // Natural arcade gravity for bouncing ball
+    gravity: -34.0,            // Buoyant bouncy arcade gravity
     terminalVelocity: 55.0,
-    jumpHeight: 3.2,           // Satisfying bounce height
-    airControlMultiplier: 0.85, // Smooth in-air steering control
-    groundFriction: 0.94,      // Preserves ball rolling momentum
-    airFriction: 0.985
+    jumpHeight: 3.8,           // Higher, springy bounce leap
+    airControlMultiplier: 0.95, // Responsive in-air steering control
+    groundFriction: 0.96,      // Smooth rolling momentum
+    airFriction: 0.99
 };
 
 /**

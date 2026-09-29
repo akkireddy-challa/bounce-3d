@@ -18,9 +18,9 @@
     "voxelBlockSize": 1,
     "characterConfig": {
       "height": 1.5,
-      "walkSpeed": 2,
-      "runSpeed": 5,
-      "fastRunSpeed": 8
+      "walkSpeed": 3.5,
+      "runSpeed": 8.0,
+      "fastRunSpeed": 12.0
     },
     "markers": [],
     "terrain": {
@@ -89,6 +89,26 @@
       "size": 416509,
       "loop": true,
       "durationSeconds": 29.995083
+    },
+    {
+      "id": "27363f1c-206a-4986-8d90-36f6c85dbcee",
+      "name": "Playful cartoon spring boing bouncy sound effect for trampoline launch",
+      "url": "https://forged-assets.bitmagic.ai/sound-effects/27363f1c-206a-4986-8d90-36f6c85dbcee/sound-effect.opus",
+      "type": "audio",
+      "format": "opus",
+      "prompt": "Playful cartoon spring boing bouncy sound effect for trampoline launch",
+      "source": "generated",
+      "size": 14014
+    },
+    {
+      "id": "bb5c6ace-07e4-4e96-b3db-07962da90b75",
+      "name": "Crisp satisfying rubber ball bounce on grass with light cartoon pop",
+      "url": "https://forged-assets.bitmagic.ai/sound-effects/bb5c6ace-07e4-4e96-b3db-07962da90b75/sound-effect.opus",
+      "type": "audio",
+      "format": "opus",
+      "prompt": "Crisp satisfying rubber ball bounce on grass with light cartoon pop",
+      "source": "generated",
+      "size": 28376
     }
   ],
   "environmentObjects": [],

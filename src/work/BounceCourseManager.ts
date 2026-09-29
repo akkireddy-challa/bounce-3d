@@ -50,8 +50,10 @@ export class BounceCourseManager {
     private sparklePool: THREE.Mesh[] = [];
     private activeSparkles: { mesh: THREE.Mesh; life: number; maxLife: number }[] = [];
 
-    // Audio Context (Procedural Web Audio API)
+    // Audio Context (Procedural Web Audio API & Bitmagic Pro SFX)
     private audioCtx: AudioContext | null = null;
+    private proBoingAudio: HTMLAudioElement | null = null;
+    private proBounceAudio: HTMLAudioElement | null = null;
 
     // HUD DOM Elements
     private hudContainer: HTMLElement | null = null;
@@ -66,6 +68,14 @@ export class BounceCourseManager {
         this.player = player;
         this.playerController = playerController;
         this.engine = engine;
+
+        // Initialize Bitmagic Pro Studio Audio SFX
+        try {
+            this.proBoingAudio = new Audio('https://forged-assets.bitmagic.ai/sound-effects/27363f1c-206a-4986-8d90-36f6c85dbcee/sound-effect.opus');
+            this.proBoingAudio.volume = 0.75;
+            this.proBounceAudio = new Audio('https://forged-assets.bitmagic.ai/sound-effects/bb5c6ace-07e4-4e96-b3db-07962da90b75/sound-effect.opus');
+            this.proBounceAudio.volume = 0.65;
+        } catch (e) {}
 
         // Position player on the elevated spawn island
         this.spawnCheckpoint.set(0, 4.6, 0);
@@ -145,6 +155,17 @@ export class BounceCourseManager {
 
     public playBoing(): void {
         this.resumeAudio();
+        if (this.proBoingAudio) {
+            try {
+                this.proBoingAudio.currentTime = 0;
+                this.proBoingAudio.play().catch(() => this.playSynthBoing());
+                return;
+            } catch (e) {}
+        }
+        this.playSynthBoing();
+    }
+
+    private playSynthBoing(): void {
         if (!this.audioCtx) return;
         const now = this.audioCtx.currentTime;
 
@@ -213,6 +234,18 @@ export class BounceCourseManager {
 
     public playBounceThud(impactSpeed: number = 1.0): void {
         this.resumeAudio();
+        if (this.proBounceAudio && impactSpeed > 2.0) {
+            try {
+                this.proBounceAudio.currentTime = 0;
+                this.proBounceAudio.volume = Math.min(0.85, 0.35 + impactSpeed * 0.04);
+                this.proBounceAudio.play().catch(() => this.playSynthBounceThud(impactSpeed));
+                return;
+            } catch (e) {}
+        }
+        this.playSynthBounceThud(impactSpeed);
+    }
+
+    private playSynthBounceThud(impactSpeed: number = 1.0): void {
         if (!this.audioCtx) return;
         const now = this.audioCtx.currentTime;
 
@@ -452,39 +485,25 @@ export class BounceCourseManager {
         this.ballVisual.name = 'Bounce3D_BallVisualGroup';
 
         const radius = 0.55;
-        // Faceted low-poly diamond ruby sphere matching reference artwork
-        const sphereGeo = new THREE.IcosahedronGeometry(radius, 2);
+        // Faceted low-poly diamond ruby sphere with fine geodesic facets matching reference artwork
+        const sphereGeo = new THREE.IcosahedronGeometry(radius, 3);
         const sphereMat = new THREE.MeshStandardMaterial({
-            color: 0xEF4444, // Candy-apple red faceted ruby
-            roughness: 0.16, // High-gloss sheen
-            metalness: 0.25, // Specular bounce
-            flatShading: true, // Visible gem-cut polygonal facets!
-            emissive: 0x7F1D1D,
-            emissiveIntensity: 0.35
+            color: 0xDC2626, // Saturated, rich candy-apple crimson red
+            roughness: 0.22, // Soft specular shine without washing out diffuse color
+            metalness: 0.08, // Dielectric rubber/gem
+            flatShading: true, // Crisp gem-cut facets catching light from all angles!
+            emissive: 0x450A0A, // Deep warm shadow
+            emissiveIntensity: 0.15
         });
 
         this.ballInnerMesh = new THREE.Mesh(sphereGeo, sphereMat);
         this.ballInnerMesh.castShadow = true;
         this.ballInnerMesh.receiveShadow = true;
-
-        // Faceted diamond specular highlight glints
-        const shineGeo = new THREE.OctahedronGeometry(0.11, 0);
-        const shineMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-        const shineMesh = new THREE.Mesh(shineGeo, shineMat);
-        shineMesh.position.set(0.22, 0.32, 0.38);
-        this.ballInnerMesh.add(shineMesh);
-
-        // Secondary rim facet glint
-        const rimGeo = new THREE.OctahedronGeometry(0.06, 0);
-        const rimMat = new THREE.MeshBasicMaterial({ color: 0xFECACA });
-        const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-        rimMesh.position.set(-0.28, -0.15, 0.38);
-        this.ballInnerMesh.add(rimMesh);
-
         this.ballVisual.add(this.ballInnerMesh);
 
-        // Point light on the ball for radiant glow
-        const ballLight = new THREE.PointLight(0xEF4444, 1.8, 4);
+        // Radiant arcade point light illuminating the grass beneath the ball
+        const ballLight = new THREE.PointLight(0xEF4444, 2.0, 5);
+        ballLight.position.set(0, 0.2, 0);
         this.ballVisual.add(ballLight);
 
         this.ballVisual.position.copy(this.spawnCheckpoint);
@@ -1438,12 +1457,18 @@ export class BounceCourseManager {
                     const heightAboveGround = Math.max(0, playerPos.y - groundY);
                     const isGroundedNow = heightAboveGround < 0.65;
 
-                    // Landing impact detection: trigger rubber thud and jelly wobble
-                    if (!this.wasGrounded && isGroundedNow && vy <= 0) {
-                        this.squishWobbleTimer = 0.32;
+                    // Landing impact detection: trigger rubber thud, elastic rebound bounce, and squash wobble
+                    if (!this.wasGrounded && isGroundedNow && vy <= -1.8) {
                         const impactSpeed = Math.abs(vy);
-                        if (impactSpeed > 2.0) {
-                            this.playBounceThud(impactSpeed);
+                        this.squishWobbleTimer = 0.35;
+                        this.playBounceThud(impactSpeed);
+
+                        // Elastic Rubber Ball Restitution: natural rebound bounce when dropping from height
+                        if (impactSpeed > 3.6) {
+                            const reboundY = Math.min(13.0, impactSpeed * 0.55);
+                            const curVel = body.linvel();
+                            body.setLinvel({ x: curVel.x * 0.96, y: reboundY, z: curVel.z * 0.96 }, true);
+                            this.ballScale.set(1.3, 0.68, 1.3);
                         }
                     }
                     this.wasGrounded = isGroundedNow;
@@ -1451,11 +1476,11 @@ export class BounceCourseManager {
                     // Squash & stretch physics behavior
                     if (this.squishWobbleTimer > 0) {
                         this.squishWobbleTimer -= deltaTime;
-                        const progress = Math.max(0, this.squishWobbleTimer / 0.32);
+                        const progress = Math.max(0, this.squishWobbleTimer / 0.35);
                         const wobble = Math.sin((1.0 - progress) * Math.PI * 4) * progress;
-                        this.ballScale.y = 1.0 - wobble * 0.38;
-                        this.ballScale.x = 1.0 + wobble * 0.2;
-                        this.ballScale.z = 1.0 + wobble * 0.2;
+                        this.ballScale.y = 1.0 - wobble * 0.42;
+                        this.ballScale.x = 1.0 + wobble * 0.22;
+                        this.ballScale.z = 1.0 + wobble * 0.22;
                     } else if (vy > 3.5) {
                         // Rising fast in the air
                         this.targetBallScale.set(0.85, 1.25, 0.85);
@@ -1521,24 +1546,26 @@ export class BounceCourseManager {
             }
         });
 
-        // 2. Yellow Trampolines: super bounce
+        // 2. Yellow Trampolines: super bounce with robust cylindrical detection
         this.trampolines.forEach(tramp => {
             if (tramp.cooldown > 0) {
                 tramp.cooldown -= deltaTime;
             }
 
-            const dist = playerPos.distanceTo(tramp.basePosition);
-            if (dist < 1.8 && playerPos.y >= tramp.basePosition.y && tramp.cooldown <= 0) {
-                tramp.cooldown = 0.5;
+            const horizDist = Math.hypot(playerPos.x - tramp.basePosition.x, playerPos.z - tramp.basePosition.z);
+            const vertOffset = playerPos.y - tramp.basePosition.y;
+            // Pad radius is 1.48m; triggers reliably when ball lands or rolls over pad
+            if (horizDist < 1.75 && vertOffset >= -0.2 && vertOffset <= 2.4 && tramp.cooldown <= 0) {
+                tramp.cooldown = 0.35;
                 this.playBoing();
-                this.ballScale.set(1.35, 0.65, 1.35); // Impact squash
+                this.ballScale.set(1.45, 0.52, 1.45); // Juicy impact squash
                 this.addScore(150, '+150 MEGA BOUNCE!');
 
                 // Compress spring visually
-                tramp.springMesh.scale.set(1.2, 0.4, 1.2);
+                tramp.springMesh.scale.set(1.3, 0.3, 1.3);
                 setTimeout(() => {
                     tramp.springMesh.scale.set(1.0, 1.0, 1.0);
-                }, 180);
+                }, 160);
 
                 // Apply trajectory launch impulse
                 if (this.playerController?.playerBody) {
@@ -1546,7 +1573,7 @@ export class BounceCourseManager {
                     if (typeof body.setLinvel === 'function') {
                         if (tramp.isVertical) {
                             const curVel = body.linvel();
-                            body.setLinvel({ x: curVel.x * 1.2, y: tramp.launch.y, z: curVel.z * 1.2 }, true);
+                            body.setLinvel({ x: curVel.x * 0.8, y: 22.5, z: curVel.z * 0.8 }, true);
                         } else {
                             body.setLinvel({ x: tramp.launch.x, y: tramp.launch.y, z: tramp.launch.z }, true);
                         }
