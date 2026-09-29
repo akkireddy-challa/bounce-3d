@@ -26,6 +26,7 @@ import { VehicleManager } from 'engine/VehicleManager.js';
 import { Spawner } from 'engine/Spawner.js';
 import { VehicleSpawner } from 'engine/VehicleSpawner.js';
 import { mergeCharacterConfig } from 'engine/CharacterConfig.js';
+import type { MobileActionSpec } from 'engine/MobileActionSpec.js';
 
 export class VoxelGame implements GenreGameInterface {
     private engine: EngineLike;
@@ -105,6 +106,19 @@ export class VoxelGame implements GenreGameInterface {
 
         // Provide Bitmagic modifications callback for post-creation scaling/physics
         this.engine.applyCharacterModifications = applyBitmagicModifications;
+    }
+
+    declareMobileActions(): MobileActionSpec[] {
+        return [
+            {
+                action: 'retry',
+                desktopKeys: ['KeyR'],
+                iconKey: 'reload',
+                label: 'RETRY',
+                behavior: 'tap',
+                preferredSlot: 'left-1',
+            },
+        ];
     }
 
     async load(gameId: string): Promise<void> {
@@ -338,9 +352,12 @@ export class VoxelGame implements GenreGameInterface {
         // Register playerController with engine for debug systems (NpcManager projectile detection)
         this.engine.registerPlayerController(this.playerController);
 
-        // Apply movement speed from characterConfig (runSpeed is used as the default movement speed)
-        const charConfig = mergeCharacterConfig(this.worldProfileData.characterConfig);
-        this.playerController.getMovementSystem().setMoveSpeed(charConfig.runSpeed);
+        // Forged platformer levels carry an exact movement contract that the engine
+        // applies at controller construction. Keep its validated jump spacing intact.
+        if (!this.worldProfileData.meshLevel) {
+            const charConfig = mergeCharacterConfig(this.worldProfileData.characterConfig);
+            this.playerController.getMovementSystem().setMoveSpeed(charConfig.runSpeed);
+        }
 
         // Set the calculated capsule dimensions for accurate ground detection
         const capsuleHeight = this.playerLoader.getCapsuleHeight();
@@ -641,4 +658,3 @@ export class VoxelGame implements GenreGameInterface {
 
 // Register the VoxelGame with the genre registry
 genreRegistry.registerGenre('Voxel', VoxelGame);
-

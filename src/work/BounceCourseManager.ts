@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getRapier } from 'engine/physics/RapierPhysics.js';
 import { CollisionGroup, CollisionMask, makeCollisionGroups } from 'engine/CollisionLayers.js';
+import { findForgedFeature, forgedFeatures, forgedPathFeature } from 'engine/ForgedLevelData.js';
 
 /**
  * 🔴 BounceCourseManager: Handles Golden Rings, Trampolines, Spikes, Audio Synth,
@@ -39,7 +40,12 @@ export class BounceCourseManager {
     public score: number = 0;
     public highScore: number = 0;
     private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
+    private initialSpawn: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
     private checkpointIndex: number = 0;
+    private readonly ballRadius = 0.55;
+    private readonly usesForgedLevel: boolean;
+    private forgedCheckpoints: THREE.Vector3[] = [];
+    private forgedFallY = -Infinity;
 
     // Ball Squash, Stretch, Shadow, and Particle Animation
     private ballScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
@@ -68,6 +74,7 @@ export class BounceCourseManager {
         this.player = player;
         this.playerController = playerController;
         this.engine = engine;
+        this.usesForgedLevel = Boolean(engine?.getGameData?.()?.worldProfileData?.meshLevel);
 
         // Initialize Bitmagic Pro Studio Audio SFX
         try {
@@ -77,16 +84,21 @@ export class BounceCourseManager {
             this.proBounceAudio.volume = 0.65;
         } catch (e) {}
 
-        // Position player on the elevated spawn island
-        this.spawnCheckpoint.set(0, 4.6, 0);
-        this.lastPlayerPos.set(0, 4.6, 0);
-        if (player) {
+        // A forged mesh level owns the player spawn and collider height. The legacy
+        // course keeps its hand-authored start point for backwards compatibility.
+        if (this.usesForgedLevel) {
+            this.spawnCheckpoint.copy(this.getPhysicsPosition());
+            this.lastPlayerPos.copy(this.getBallPosition());
+        } else if (player) {
+            this.spawnCheckpoint.set(0, 4.6, 0);
+            this.lastPlayerPos.set(0, 4.6, 0);
             player.position.set(0, 4.6, 0);
             if (this.playerController?.playerBody) {
                 this.playerController.playerBody.setTranslation({ x: 0, y: 4.6, z: 0 }, true);
                 this.playerController.playerBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
+        this.initialSpawn.copy(this.spawnCheckpoint);
 
         // Load persisted high score from local storage
         try {
@@ -98,18 +110,49 @@ export class BounceCourseManager {
             this.highScore = 0;
         }
 
-        // Global 'R' key listener for instant run retry
-        window.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R') {
-                this.restartRun();
-            }
-        });
-
         this.initAudio();
         this.initHUD();
         this.createBallVisual();
-        this.buildObstacleCourse();
-        this.buildWorldScenery();
+        if (this.usesForgedLevel) {
+            this.buildForgedCourse();
+        } else {
+            this.buildObstacleCourse();
+            this.buildWorldScenery();
+        }
+    }
+
+    private getPhysicsPosition(): THREE.Vector3 {
+        const body = this.playerController?.playerBody;
+        if (body && typeof body.translation === 'function') {
+            const position = body.translation();
+            return new THREE.Vector3(position.x, position.y, position.z);
+        }
+        return this.player.position.clone();
+    }
+
+    /**
+     * Align the visual ball to the physics capsule's contact point. This avoids
+     * copying the character group's origin, which is above the collider floor
+     * and makes the ball appear to clip into a forged mesh level.
+     */
+    private getBallPosition(): THREE.Vector3 {
+        // On a surface, use the controller's collision-backed ground query. It
+        // gives the visual ball an exact tangent contact with forged terrain.
+        if (this.playerController?.isGrounded && typeof this.playerController.getGroundPosition === 'function') {
+            const ground = this.playerController.getGroundPosition();
+            return new THREE.Vector3(ground.x, ground.y + this.ballRadius, ground.z);
+        }
+        const body = this.playerController?.playerBody;
+        if (body && typeof body.translation === 'function') {
+            const position = body.translation();
+            const capsuleHeight = this.playerController?.getCapsuleHeight?.() ?? 1.5;
+            return new THREE.Vector3(
+                position.x,
+                position.y - capsuleHeight * 0.5 + this.ballRadius,
+                position.z
+            );
+        }
+        return this.player.position.clone();
     }
 
     private initAudio(): void {
@@ -425,7 +468,7 @@ export class BounceCourseManager {
         this.gameTime = 0;
         this.score = 0;
         this.checkpointIndex = 0;
-        this.spawnCheckpoint.set(0, 4.6, 0);
+        this.spawnCheckpoint.copy(this.initialSpawn);
 
         // Re-enable all rings
         this.ringsCollected = 0;
@@ -457,15 +500,21 @@ export class BounceCourseManager {
         if (this.playerController?.playerBody) {
             const body = this.playerController.playerBody;
             if (typeof body.setTranslation === 'function') {
-                body.setTranslation({ x: 0, y: 5.6, z: 0 }, true);
+                body.setTranslation({
+                    x: this.spawnCheckpoint.x,
+                    y: this.usesForgedLevel ? this.spawnCheckpoint.y : 5.6,
+                    z: this.spawnCheckpoint.z
+                }, true);
             }
             if (typeof body.setLinvel === 'function') {
                 body.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
-        this.player.position.set(0, 4.6, 0);
+        if (!this.usesForgedLevel) {
+            this.player.position.set(0, 4.55, 0);
+        }
         if (this.ballVisual) {
-            this.ballVisual.position.set(0, 5.15, 0);
+            this.ballVisual.position.copy(this.getBallPosition());
         }
         this.ballScale.set(1, 1, 1);
         this.targetBallScale.set(1, 1, 1);
@@ -506,7 +555,7 @@ export class BounceCourseManager {
         ballLight.position.set(0, 0.2, 0);
         this.ballVisual.add(ballLight);
 
-        this.ballVisual.position.copy(this.spawnCheckpoint);
+        this.ballVisual.position.copy(this.getBallPosition());
         this.scene.add(this.ballVisual);
 
         // Ground Drop Shadow Decal (Grounded projection circle)
@@ -520,7 +569,8 @@ export class BounceCourseManager {
         });
         this.shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
         this.shadowMesh.rotation.x = -Math.PI / 2;
-        this.shadowMesh.position.set(this.spawnCheckpoint.x, 3.76, this.spawnCheckpoint.z);
+        const initialBallPosition = this.getBallPosition();
+        this.shadowMesh.position.set(initialBallPosition.x, initialBallPosition.y - this.ballRadius + 0.02, initialBallPosition.z);
         this.scene.add(this.shadowMesh);
 
         // Initialize reusable pool of speed sparkle particles
@@ -1407,36 +1457,107 @@ export class BounceCourseManager {
         this.exitPortal = { group: portalGroup, unlocked: false, light: portalLight };
     }
 
+    /** Wire the gameplay layer to the world-forger's authored route. */
+    private buildForgedCourse(): void {
+        const gameData = this.engine?.getGameData?.();
+        const route = forgedPathFeature(gameData);
+        const routePoints = route?.points ?? [];
+        const features = forgedFeatures(gameData);
+
+        // The forger validates these points against its movement contract. Place
+        // rings on the safe route rather than guessing independent coordinates.
+        const ringCount = Math.min(12, Math.max(5, Math.floor(routePoints.length / 12)));
+        for (let index = 1; index <= ringCount; index++) {
+            const point = routePoints[Math.round((routePoints.length - 1) * index / (ringCount + 1))];
+            if (!point) continue;
+            const ringPosition = new THREE.Vector3(point.x, point.y + 1.45, point.z);
+            const ringMesh = new THREE.Mesh(
+                new THREE.TorusGeometry(1.4, 0.22, 6, 16),
+                new THREE.MeshStandardMaterial({
+                    color: 0xFBBF24,
+                    metalness: 0.9,
+                    roughness: 0.16,
+                    flatShading: true,
+                    emissive: 0xB45309,
+                    emissiveIntensity: 0.65
+                })
+            );
+            ringMesh.position.copy(ringPosition);
+            ringMesh.name = `ForgedGoldenHoop_${index}`;
+            const ringLight = new THREE.PointLight(0xFBBF24, 2.5, 8);
+            ringLight.position.copy(ringPosition);
+            this.scene.add(ringMesh, ringLight);
+            this.rings.push({ mesh: ringMesh, collected: false, light: ringLight });
+        }
+        this.totalRings = this.rings.length;
+
+        this.forgedCheckpoints = features
+            .filter(feature => feature.kind?.toLowerCase() === 'checkpoint')
+            .flatMap(feature => feature.points ?? [])
+            .map(point => new THREE.Vector3(point.x, point.y, point.z));
+        this.forgedFallY = routePoints.length
+            ? Math.min(...routePoints.map(point => point.y)) - 25
+            : this.spawnCheckpoint.y - 40;
+
+        const portal = findForgedFeature(gameData, { kind: 'portalGoal' });
+        const portalPoint = portal?.points?.[0];
+        if (portalPoint) {
+            const portalGroup = new THREE.Group();
+            portalGroup.name = 'ForgedPortalGoalTrigger';
+            portalGroup.position.set(portalPoint.x, portalPoint.y + 1.5, portalPoint.z);
+            const portalLight = new THREE.PointLight(0x00FFFF, 0, 30);
+            portalGroup.add(portalLight);
+            this.scene.add(portalGroup);
+            this.exitPortal = { group: portalGroup, unlocked: false, light: portalLight };
+        }
+
+        this.updateRingsDisplay();
+        console.log(`🔴 Forged course ready: ${this.totalRings} hoops, ${this.forgedCheckpoints.length} checkpoints`);
+    }
+
     public update(deltaTime: number): void {
         if (!this.player) return;
+
+        // `retry` is declared by VoxelGame, so R and the mobile RETRY button
+        // trigger the same one-frame action with guaranteed platform parity.
+        if (this.playerController?.keys?.retry) {
+            this.playerController.keys.retry = false;
+            this.restartRun();
+            return;
+        }
 
         if (!this.isWon) {
             this.gameTime += deltaTime;
             this.updateTimerDisplay();
         }
 
-        const playerPos = this.player.position;
+        const playerPos = this.getBallPosition();
 
-        // Calculate ground elevation beneath the player
+        // Calculate ground elevation beneath the player (actual top grass surface)
         let groundY = 0.5; // Water base
-        if (Math.hypot(playerPos.x - 0, playerPos.z - (-1.0)) < 6.8) groundY = 3.76;
-        else if (Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0)) < 5.6) groundY = 4.86;
-        else if (Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0)) < 5.6) groundY = 6.46;
-        else if (Math.hypot(playerPos.x - 0, playerPos.z - (-42.0)) < 7.6) groundY = 8.26;
+        if (this.usesForgedLevel) {
+            groundY = this.engine?.getWorldHeightAt?.(playerPos.x, playerPos.z) ?? playerPos.y - this.ballRadius;
+        } else if (Math.hypot(playerPos.x - 0, playerPos.z - (-1.0)) < 6.8) groundY = 4.0;
+        else if (Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0)) < 5.6) groundY = 5.1;
+        else if (Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0)) < 5.6) groundY = 6.7;
+        else if (Math.hypot(playerPos.x - 0, playerPos.z - (-42.0)) < 7.6) groundY = 8.5;
 
-        // Dynamic Drop Shadow Projection
+        // Dynamic Drop Shadow Projection right on top of the grass surface
         if (this.shadowMesh) {
             this.shadowMesh.position.set(playerPos.x, groundY + 0.02, playerPos.z);
-            const heightAboveGround = Math.max(0, playerPos.y - groundY);
-            const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.05);
+            const ballBottom = playerPos.y - 0.55;
+            const heightAboveGround = Math.max(0, ballBottom - groundY);
+            const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.08);
             this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
-            (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.45 - heightAboveGround * 0.035);
+            (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.5 - heightAboveGround * 0.06);
         }
 
         // 0. Update Red Ball Visual: Sync position, rolling rotation, squish/stretch, and idle breathing
         if (this.ballVisual) {
+            // Anchor ball bottom firmly to the ground surface even during squash & stretch
+            const squashGroundAnchor = 0.55 * (1.0 - this.ballScale.y);
             this.ballVisual.position.copy(playerPos);
-            this.ballVisual.position.y += 0.55;
+            this.ballVisual.position.y -= squashGroundAnchor;
 
             if (this.ballInnerMesh && this.lastPlayerPos) {
                 const dx = playerPos.x - this.lastPlayerPos.x;
@@ -1582,8 +1703,18 @@ export class BounceCourseManager {
             }
         });
 
-        // 2b. Dynamic Island Checkpoints
-        if (this.checkpointIndex < 1) {
+        // 2b. Checkpoints. Forged levels supply their route locations directly;
+        // the legacy course retains its hand-authored islands.
+        if (this.usesForgedLevel) {
+            const nextCheckpoint = this.forgedCheckpoints[this.checkpointIndex];
+            if (nextCheckpoint && playerPos.distanceTo(nextCheckpoint) < 4.5) {
+                this.checkpointIndex++;
+                this.spawnCheckpoint.copy(this.getPhysicsPosition());
+                this.playChime();
+                this.addScore(1000, `+1,000 CHECKPOINT ${this.checkpointIndex}!`);
+                this.showToast(`🏁 CHECKPOINT ${this.checkpointIndex} REACHED!`, '#38BDF8');
+            }
+        } else if (this.checkpointIndex < 1) {
             const distIsland2 = Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0));
             if (distIsland2 < 4.5 && playerPos.y >= 3.5) {
                 this.checkpointIndex = 1;
@@ -1623,7 +1754,7 @@ export class BounceCourseManager {
         });
 
         // 4. Fall boundary check (drop into water)
-        if (playerPos.y < 1.0) {
+        if (playerPos.y < (this.usesForgedLevel ? this.forgedFallY : 1.0)) {
             this.handlePlayerPop();
         }
 
@@ -1666,7 +1797,7 @@ export class BounceCourseManager {
             if (typeof body.setTranslation === 'function') {
                 body.setTranslation({
                     x: this.spawnCheckpoint.x,
-                    y: this.spawnCheckpoint.y + 1.0,
+                    y: this.usesForgedLevel ? this.spawnCheckpoint.y : this.spawnCheckpoint.y + 1.0,
                     z: this.spawnCheckpoint.z
                 }, true);
             }
@@ -1674,9 +1805,11 @@ export class BounceCourseManager {
                 body.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
-        this.player.position.copy(this.spawnCheckpoint);
+        if (!this.usesForgedLevel) {
+            this.player.position.copy(this.spawnCheckpoint);
+        }
         if (this.ballVisual) {
-            this.ballVisual.position.copy(this.spawnCheckpoint);
+            this.ballVisual.position.copy(this.getBallPosition());
         }
         this.ballScale.set(1, 1, 1);
         this.targetBallScale.set(1, 1, 1);

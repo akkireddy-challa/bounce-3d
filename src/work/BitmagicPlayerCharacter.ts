@@ -75,50 +75,18 @@ export function applyBitmagicModifications(
 export function createBitmagicBlockCharacter(characterGroup: THREE.Group) {
   characterGroup.name = 'BlockCharacter_BounceRedBall';
 
-  // 🔴 Iconic Candy-Apple Red Nokia Bounce 3D Ball
-  const ballRadius = 0.5;
-  const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
-  const ballMaterial = new THREE.MeshStandardMaterial({
-    color: 0xEF4444, // Vibrant candy-apple red
-    roughness: 0.15, // High-gloss shiny finish
-    metalness: 0.15, // Specular highlights
-  });
+  // Transparent anchor mesh with proper 1.0m height bounds to satisfy CharacterLoader
+  const anchorGeo = new THREE.BoxGeometry(0.5, 1.0, 0.5);
+  const anchorMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+  const anchorMesh = new THREE.Mesh(anchorGeo, anchorMat);
+  anchorMesh.position.set(0, 0.5, 0);
 
-  const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
-  ballMesh.name = 'bounce_ball_main';
-  ballMesh.castShadow = true;
-  ballMesh.receiveShadow = true;
-  ballMesh.position.set(0, 0, 0);
-
-  // Add glossy white specular highlight reflection spot
-  const shineGeo = new THREE.SphereGeometry(0.09, 16, 16);
-  const shineMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
-  const shineMesh = new THREE.Mesh(shineGeo, shineMat);
-  shineMesh.position.set(0.18, 0.25, 0.35);
-  ballMesh.add(shineMesh);
-
-  // Add secondary subtle rim shine
-  const rimShineGeo = new THREE.SphereGeometry(0.04, 12, 12);
-  const rimShineMat = new THREE.MeshBasicMaterial({ color: 0xFFD1D1 });
-  const rimShineMesh = new THREE.Mesh(rimShineGeo, rimShineMat);
-  rimShineMesh.position.set(-0.25, -0.1, 0.35);
-  ballMesh.add(rimShineMesh);
-
-  // Attach to torso group (captured as STANDARD_PART_NAME by BlockCharacterRenderer)
   const torsoGroup = characterGroup.getObjectByName('torso') as THREE.Group;
   if (torsoGroup) {
-    torsoGroup.add(ballMesh);
+    torsoGroup.add(anchorMesh);
   } else {
-    characterGroup.add(ballMesh);
+    characterGroup.add(anchorMesh);
   }
-
-  // Ensure shadows are enabled
-  characterGroup.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
 }
 
 export function updateBitmagicEyeBlink(_deltaTime: number) {
