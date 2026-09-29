@@ -36,8 +36,14 @@ export class BounceCourseManager {
     public ringsCollected: number = 0;
     public isWon: boolean = false;
     public gameTime: number = 0;
+    public score: number = 0;
+    public highScore: number = 0;
     private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
     private checkpointIndex: number = 0;
+
+    // Ball Squash & Stretch Physics Animation
+    private ballScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
+    private targetBallScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
     // Audio Context (Procedural Web Audio API)
     private audioCtx: AudioContext | null = null;
@@ -46,6 +52,9 @@ export class BounceCourseManager {
     private hudContainer: HTMLElement | null = null;
     private ringsDisplay: HTMLElement | null = null;
     private timerDisplay: HTMLElement | null = null;
+    private scoreDisplay: HTMLElement | null = null;
+    private highScoreDisplay: HTMLElement | null = null;
+    private retryButton: HTMLElement | null = null;
 
     constructor(scene: THREE.Scene, player: THREE.Object3D, playerController: any, engine?: any) {
         this.scene = scene;
@@ -63,6 +72,23 @@ export class BounceCourseManager {
                 this.playerController.playerBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
+
+        // Load persisted high score from local storage
+        try {
+            const saved = localStorage.getItem('bounce3d_highscore');
+            if (saved) {
+                this.highScore = parseInt(saved, 10) || 0;
+            }
+        } catch (e) {
+            this.highScore = 0;
+        }
+
+        // Global 'R' key listener for instant run retry
+        window.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.code === 'KeyR' || e.key === 'r' || e.key === 'R') {
+                this.restartRun();
+            }
+        });
 
         this.initAudio();
         this.initHUD();
@@ -201,7 +227,9 @@ export class BounceCourseManager {
         this.hudContainer.style.left = '16px';
         this.hudContainer.style.zIndex = '9999';
         this.hudContainer.style.display = 'flex';
-        this.hudContainer.style.gap = '14px';
+        this.hudContainer.style.flexWrap = 'wrap';
+        this.hudContainer.style.gap = '10px';
+        this.hudContainer.style.alignItems = 'center';
         this.hudContainer.style.fontFamily = 'system-ui, -apple-system, sans-serif';
         this.hudContainer.style.fontWeight = 'bold';
         this.hudContainer.style.pointerEvents = 'none';
@@ -212,11 +240,23 @@ export class BounceCourseManager {
         this.ringsDisplay.style.backdropFilter = 'blur(8px)';
         this.ringsDisplay.style.border = '2px solid #FBBF24';
         this.ringsDisplay.style.borderRadius = '500px';
-        this.ringsDisplay.style.padding = '8px 20px';
+        this.ringsDisplay.style.padding = '7px 16px';
         this.ringsDisplay.style.color = '#FBBF24';
-        this.ringsDisplay.style.fontSize = '18px';
-        this.ringsDisplay.style.boxShadow = '0 4px 16px rgba(251, 191, 36, 0.4)';
+        this.ringsDisplay.style.fontSize = '16px';
+        this.ringsDisplay.style.boxShadow = '0 4px 14px rgba(251, 191, 36, 0.35)';
         this.ringsDisplay.innerText = '🟡 Rings: 0 / 5';
+
+        // Score card
+        this.scoreDisplay = document.createElement('div');
+        this.scoreDisplay.style.background = 'rgba(15, 23, 42, 0.9)';
+        this.scoreDisplay.style.backdropFilter = 'blur(8px)';
+        this.scoreDisplay.style.border = '2px solid #10B981';
+        this.scoreDisplay.style.borderRadius = '500px';
+        this.scoreDisplay.style.padding = '7px 16px';
+        this.scoreDisplay.style.color = '#10B981';
+        this.scoreDisplay.style.fontSize = '16px';
+        this.scoreDisplay.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.35)';
+        this.scoreDisplay.innerText = '⭐ Score: 0';
 
         // Speedrun timer card
         this.timerDisplay = document.createElement('div');
@@ -224,15 +264,155 @@ export class BounceCourseManager {
         this.timerDisplay.style.backdropFilter = 'blur(8px)';
         this.timerDisplay.style.border = '2px solid #38BDF8';
         this.timerDisplay.style.borderRadius = '500px';
-        this.timerDisplay.style.padding = '8px 20px';
+        this.timerDisplay.style.padding = '7px 16px';
         this.timerDisplay.style.color = '#38BDF8';
-        this.timerDisplay.style.fontSize = '18px';
-        this.timerDisplay.style.boxShadow = '0 4px 16px rgba(56, 189, 248, 0.4)';
+        this.timerDisplay.style.fontSize = '16px';
+        this.timerDisplay.style.boxShadow = '0 4px 14px rgba(56, 189, 248, 0.35)';
         this.timerDisplay.innerText = '⏱️ 00:00.0';
 
+        // High Score card
+        this.highScoreDisplay = document.createElement('div');
+        this.highScoreDisplay.style.background = 'rgba(15, 23, 42, 0.9)';
+        this.highScoreDisplay.style.backdropFilter = 'blur(8px)';
+        this.highScoreDisplay.style.border = '2px solid #A855F7';
+        this.highScoreDisplay.style.borderRadius = '500px';
+        this.highScoreDisplay.style.padding = '7px 16px';
+        this.highScoreDisplay.style.color = '#C084FC';
+        this.highScoreDisplay.style.fontSize = '16px';
+        this.highScoreDisplay.style.boxShadow = '0 4px 14px rgba(168, 85, 247, 0.35)';
+        this.highScoreDisplay.innerText = `🏆 Best: ${this.highScore.toLocaleString()}`;
+
+        // Retry Button (Interactive click + Key: R)
+        this.retryButton = document.createElement('button');
+        this.retryButton.style.background = 'linear-gradient(135deg, #EF4444, #B91C1C)';
+        this.retryButton.style.border = '2px solid #FCA5A5';
+        this.retryButton.style.borderRadius = '500px';
+        this.retryButton.style.padding = '7px 18px';
+        this.retryButton.style.color = '#FFFFFF';
+        this.retryButton.style.fontSize = '15px';
+        this.retryButton.style.fontWeight = 'bold';
+        this.retryButton.style.cursor = 'pointer';
+        this.retryButton.style.pointerEvents = 'auto';
+        this.retryButton.style.boxShadow = '0 4px 14px rgba(239, 68, 68, 0.4)';
+        this.retryButton.style.transition = 'transform 0.15s ease, background 0.15s ease';
+        this.retryButton.innerText = '🔄 Retry (R)';
+        this.retryButton.title = 'Restart Run from Start (Key: R)';
+        this.retryButton.onmouseenter = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.06)'; };
+        this.retryButton.onmouseleave = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.0)'; };
+        this.retryButton.onclick = () => { this.restartRun(); };
+
         this.hudContainer.appendChild(this.ringsDisplay);
+        this.hudContainer.appendChild(this.scoreDisplay);
         this.hudContainer.appendChild(this.timerDisplay);
+        this.hudContainer.appendChild(this.highScoreDisplay);
+        this.hudContainer.appendChild(this.retryButton);
         document.body.appendChild(this.hudContainer);
+    }
+
+    public addScore(points: number, label?: string): void {
+        this.score += points;
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+            try {
+                localStorage.setItem('bounce3d_highscore', String(this.highScore));
+            } catch (e) {}
+        }
+        this.updateScoreDisplay();
+        if (label) {
+            this.showScorePopup(label, points);
+        }
+    }
+
+    private showScorePopup(label: string, points: number): void {
+        const popup = document.createElement('div');
+        popup.style.position = 'fixed';
+        popup.style.top = '78px';
+        popup.style.left = '50%';
+        popup.style.transform = 'translateX(-50%)';
+        popup.style.color = points >= 500 ? '#FBBF24' : '#10B981';
+        popup.style.fontSize = '24px';
+        popup.style.fontWeight = '900';
+        popup.style.textShadow = '0 0 14px rgba(251, 191, 36, 0.8), 0 2px 4px rgba(0,0,0,0.9)';
+        popup.style.pointerEvents = 'none';
+        popup.style.zIndex = '99999';
+        popup.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+        popup.style.transition = 'all 0.75s ease-out';
+        popup.style.opacity = '1';
+        popup.innerText = label;
+        document.body.appendChild(popup);
+
+        requestAnimationFrame(() => {
+            popup.style.transform = 'translate(-50%, -40px) scale(1.18)';
+            popup.style.opacity = '0';
+        });
+
+        setTimeout(() => popup.remove(), 750);
+    }
+
+    private updateScoreDisplay(): void {
+        if (this.scoreDisplay) {
+            this.scoreDisplay.innerText = `⭐ Score: ${this.score.toLocaleString()}`;
+        }
+        if (this.highScoreDisplay) {
+            this.highScoreDisplay.innerText = `🏆 Best: ${this.highScore.toLocaleString()}`;
+        }
+    }
+
+    public restartRun(): void {
+        this.isWon = false;
+        this.gameTime = 0;
+        this.score = 0;
+        this.checkpointIndex = 0;
+        this.spawnCheckpoint.set(0, 4.6, 0);
+
+        // Re-enable all rings
+        this.ringsCollected = 0;
+        this.rings.forEach(r => {
+            r.collected = false;
+            r.mesh.visible = true;
+            r.mesh.scale.set(1, 1, 1);
+            if (r.light) r.light.intensity = 2.5;
+        });
+
+        // Relock portal
+        if (this.exitPortal) {
+            this.exitPortal.unlocked = false;
+            const diskMesh = this.exitPortal.group.getObjectByName('portal_energy_disk') as THREE.Mesh;
+            if (diskMesh && diskMesh.material) {
+                (diskMesh.material as THREE.MeshBasicMaterial).color.setHex(0x06B6D4);
+            }
+            if (this.exitPortal.light) {
+                this.exitPortal.light.color.setHex(0x00FFFF);
+                this.exitPortal.light.intensity = 6.0;
+            }
+        }
+
+        // Remove victory modal if present
+        const modal = document.getElementById('bounce-victory-modal');
+        if (modal) modal.remove();
+
+        // Teleport player back to Spawn Island
+        if (this.playerController?.playerBody) {
+            const body = this.playerController.playerBody;
+            if (typeof body.setTranslation === 'function') {
+                body.setTranslation({ x: 0, y: 5.6, z: 0 }, true);
+            }
+            if (typeof body.setLinvel === 'function') {
+                body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+            }
+        }
+        this.player.position.set(0, 4.6, 0);
+        if (this.ballVisual) {
+            this.ballVisual.position.set(0, 5.15, 0);
+        }
+        this.ballScale.set(1, 1, 1);
+        this.targetBallScale.set(1, 1, 1);
+
+        this.updateRingsDisplay();
+        this.updateTimerDisplay();
+        this.updateScoreDisplay();
+        this.playChime();
+        this.showToast('🔄 RUN RESTARTED FROM SPAWN', '#38BDF8');
     }
 
     /**
@@ -1030,7 +1210,7 @@ export class BounceCourseManager {
 
         const playerPos = this.player.position;
 
-        // 0. Update Red Ball Visual: Sync position and realistic roll rotation
+        // 0. Update Red Ball Visual: Sync position, realistic rolling, and squish/stretch physics
         if (this.ballVisual) {
             this.ballVisual.position.copy(playerPos);
             this.ballVisual.position.y += 0.55;
@@ -1043,6 +1223,23 @@ export class BounceCourseManager {
                 this.ballInnerMesh.rotation.x += dz * 2.0;
             }
             this.lastPlayerPos.copy(playerPos);
+
+            // Dynamic squash & stretch physics based on vertical velocity
+            if (this.playerController?.playerBody && this.ballInnerMesh) {
+                const body = this.playerController.playerBody;
+                if (typeof body.linvel === 'function') {
+                    const vy = body.linvel().y;
+                    if (vy > 4.0) {
+                        this.targetBallScale.set(0.86, 1.28, 0.86); // Soaring upward stretch
+                    } else if (vy < -5.0) {
+                        this.targetBallScale.set(0.92, 1.18, 0.92); // Falling downward stretch
+                    } else {
+                        this.targetBallScale.set(1.0, 1.0, 1.0);    // Rest / ground roll
+                    }
+                }
+                this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
+                this.ballInnerMesh.scale.copy(this.ballScale);
+            }
         }
 
         // 1. Golden Hoops: rotate & check pass-through
@@ -1055,6 +1252,7 @@ export class BounceCourseManager {
                     ring.collected = true;
                     this.ringsCollected++;
                     this.playChime();
+                    this.addScore(500, '+500 GOLDEN HOOP!');
                     this.updateRingsDisplay();
 
                     // Animate ring collect: flash and shrink
@@ -1090,6 +1288,8 @@ export class BounceCourseManager {
             if (dist < 1.8 && playerPos.y >= tramp.basePosition.y && tramp.cooldown <= 0) {
                 tramp.cooldown = 0.5;
                 this.playBoing();
+                this.ballScale.set(1.35, 0.65, 1.35); // Impact squash
+                this.addScore(150, '+150 MEGA BOUNCE!');
 
                 // Compress spring visually
                 tramp.springMesh.scale.set(1.2, 0.4, 1.2);
@@ -1119,6 +1319,7 @@ export class BounceCourseManager {
                 this.checkpointIndex = 1;
                 this.spawnCheckpoint.set(10.5, 5.6, -17.0);
                 this.playChime();
+                this.addScore(1000, '+1,000 CHECKPOINT 1!');
                 this.showToast('🏁 CHECKPOINT 1: AZURE TERRACE!', '#38BDF8');
             }
         }
@@ -1128,6 +1329,7 @@ export class BounceCourseManager {
                 this.checkpointIndex = 2;
                 this.spawnCheckpoint.set(-10.5, 7.2, -29.0);
                 this.playChime();
+                this.addScore(1000, '+1,000 CHECKPOINT 2!');
                 this.showToast('🏁 CHECKPOINT 2: AMETHYST PINNACLE!', '#A855F7');
             }
         }
@@ -1137,6 +1339,7 @@ export class BounceCourseManager {
                 this.checkpointIndex = 3;
                 this.spawnCheckpoint.set(0, 9.0, -42.0);
                 this.playChime();
+                this.addScore(1500, '+1,500 CITADEL REACHED!');
                 this.showToast('🏁 FINAL CHECKPOINT: GOLDEN CITADEL!', '#F59E0B');
             }
         }
@@ -1205,43 +1408,54 @@ export class BounceCourseManager {
         if (this.ballVisual) {
             this.ballVisual.position.copy(this.spawnCheckpoint);
         }
+        this.ballScale.set(1, 1, 1);
+        this.targetBallScale.set(1, 1, 1);
     }
 
     private triggerVictory(): void {
         this.isWon = true;
         this.playVictory();
 
+        // Speedrun time bonus (up to 10,000 points)
+        const timeBonus = Math.max(500, Math.floor(10000 - this.gameTime * 50));
+        this.addScore(timeBonus, `+${timeBonus.toLocaleString()} SPEEDRUN BONUS!`);
+
         const timeStr = this.formatTime(this.gameTime);
         const victoryCard = document.createElement('div');
+        victoryCard.id = 'bounce-victory-modal';
         victoryCard.style.position = 'fixed';
         victoryCard.style.top = '50%';
         victoryCard.style.left = '50%';
         victoryCard.style.transform = 'translate(-50%, -50%)';
         victoryCard.style.background = 'rgba(15, 23, 42, 0.95)';
+        victoryCard.style.backdropFilter = 'blur(12px)';
         victoryCard.style.border = '4px solid #10B981';
         victoryCard.style.borderRadius = '24px';
-        victoryCard.style.padding = '32px 48px';
+        victoryCard.style.padding = '36px 48px';
         victoryCard.style.color = '#FFFFFF';
         victoryCard.style.textAlign = 'center';
         victoryCard.style.zIndex = '100000';
-        victoryCard.style.boxShadow = '0 0 40px rgba(16, 185, 129, 0.6)';
+        victoryCard.style.boxShadow = '0 0 50px rgba(16, 185, 129, 0.65)';
         victoryCard.style.fontFamily = 'system-ui, -apple-system, sans-serif';
 
         victoryCard.innerHTML = `
-            <div style="font-size: 42px; margin-bottom: 8px;">🏆 STAGE CLEAR! 🏆</div>
-            <div style="font-size: 22px; color: #FBBF24; margin-bottom: 16px;">Nokia Bounce 3D Champion</div>
-            <div style="font-size: 28px; color: #38BDF8; font-weight: bold; margin-bottom: 24px;">Time: ${timeStr}</div>
+            <div style="font-size: 40px; margin-bottom: 6px;">🏆 STAGE CLEAR! 🏆</div>
+            <div style="font-size: 20px; color: #FBBF24; margin-bottom: 18px;">Nokia Bounce 3D Champion</div>
+            <div style="font-size: 32px; color: #10B981; font-weight: 900; margin-bottom: 8px;">Score: ${this.score.toLocaleString()}</div>
+            <div style="font-size: 18px; color: #C084FC; font-weight: bold; margin-bottom: 8px;">High Score: ${this.highScore.toLocaleString()}</div>
+            <div style="font-size: 22px; color: #38BDF8; font-weight: bold; margin-bottom: 24px;">Time: ${timeStr}</div>
             <button id="bounce-restart-btn" style="
                 background: linear-gradient(135deg, #10B981, #059669);
                 border: none;
                 border-radius: 500px;
-                padding: 12px 32px;
+                padding: 12px 36px;
                 color: #FFFFFF;
                 font-size: 18px;
                 font-weight: bold;
                 cursor: pointer;
                 box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-            ">Play Again</button>
+                transition: transform 0.15s ease;
+            ">Play Again (R)</button>
         `;
 
         document.body.appendChild(victoryCard);
@@ -1249,7 +1463,7 @@ export class BounceCourseManager {
         const restartBtn = document.getElementById('bounce-restart-btn');
         if (restartBtn) {
             restartBtn.addEventListener('click', () => {
-                window.location.reload();
+                this.restartRun();
             });
         }
     }
