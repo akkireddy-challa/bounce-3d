@@ -7,7 +7,7 @@
       "y": 0.5,
       "z": 4
     },
-    "skyboxUrl": "https://forged-assets.bitmagic.ai/images/0aa9152b-06b6-4f53-b4be-a4687e3d9337/image.webp",
+    "skyboxUrl": "https://forged-assets.bitmagic.ai/images/29d58605-0a98-45fb-8b3d-32559921b42b/image.webp",
     "fogConfig": {
       "enabled": true,
       "color": "#BAE6FD",
@@ -33,7 +33,7 @@
     "customBlockTypes": [],
     "hud": {
       "startScreen": {
-        "imageUrl": "https://forged-assets.bitmagic.ai/images/184be699-323b-4872-84af-46707a8ed3d2/image.webp"
+        "imageUrl": "https://forged-assets.bitmagic.ai/images/ebacbaee-852d-4e58-a6a6-9887cec93a5d/image.webp"
       },
       "theme": {
         "name": "Bitmagic",
@@ -69,14 +69,14 @@
   },
   "assets": [
     {
-      "id": "img-cover_art-1790697245075",
+      "id": "img-cover_art-1790701446863",
       "name": "cover_art",
-      "url": "https://forged-assets.bitmagic.ai/images/184be699-323b-4872-84af-46707a8ed3d2/image.webp",
-      "screenshotUrl": "https://forged-assets.bitmagic.ai/images/184be699-323b-4872-84af-46707a8ed3d2/image.webp",
+      "url": "https://forged-assets.bitmagic.ai/images/ebacbaee-852d-4e58-a6a6-9887cec93a5d/image.webp",
+      "screenshotUrl": "https://forged-assets.bitmagic.ai/images/ebacbaee-852d-4e58-a6a6-9887cec93a5d/image.webp",
       "type": "image",
       "source": "generated",
-      "prompt": "Low-poly art: flat-shaded polygon meshes with clean facets and hard edges, simple colour blocking, no visible cubes, no voxels.\nA low-poly game scene based on this game design:\n# Game design\n\nWritten from `bitmagic init --idea`. Keep it current as the game changes \u2014 `bitmagic cover` reads this file.\n\n## Pitch\n\nNokia Bounce 3D is a physics-driven 3D platformer where players guide an iconic high-gloss red rubber sphere across floating island courses, leaping through golden hoop rings, bouncing high on yellow trampolines, dodging deadly hazard spikes, and speeding to the swirling exit portal.\n\n## Core loop\n\n- **Roll & Momentum**: Roll and steer the bouncy red sphere across floating platforms with responsive momentum physics.\n- **Collect Golden Hoops**: Navigate jumping arcs and ramps to leap through 5 floating golden hoops, triggering melodic chimes.\n- **Rubber Trampoline Launches**: Hit spring-loaded yellow bounce pads to gain massive vertical airtime to reach elevated ledges.\n- **Hazard Navigation**: Dodge sharp red crystal spikes; collisions instantly pop the ball and trigger checkpoint respawns.\n- **Exit Portal Speedrun**: Unlock the swirling dimensional portal once all 5 hoops are collected, completing the stage with a personal speedrun record.\n\n## World & look\n\nA sunny, cheerful arcade dreamscape of floating green island platforms with stone borders suspended in a bright turquoise sky with fluffy stylized low-poly clouds. Floating golden rings gleam with metallic specular highlights. Vibrant yellow trampolines with visible steel accordion springs. Red geometric crystal spikes warn of peril. A magical swirling cyan-magenta vortex portal marks the \n\nDepict the world and atmosphere as a single illustrated scene. Low-poly art with flat-shaded facets and hard edges on every object, no cubes, no voxels, rendered as a highly polished 3D scene with the craft of a Pixar-quality animated film, cinematic lighting that fits the scene, soft ambient occlusion, rich detail and expressive composition. Wordless illustration, no text, no title, no words, no letters, no logos, no UI.",
-      "size": 77974
+      "prompt": "Low-poly art: flat-shaded polygon meshes with clean facets and hard edges, simple colour blocking, no visible cubes, no voxels.\nA low-poly game scene based on this game design:\n# Game design\n\nWritten from `bitmagic init --idea`. Keep it current as the game changes — `bitmagic cover` reads this file.\n\n## Pitch\n\nNokia Bounce 3D is a physics-driven 3D platformer where players guide an iconic high-gloss red rubber sphere across floating island courses, leaping through golden hoop rings, bouncing high on yellow trampolines, dodging deadly hazard spikes, and speeding to the swirling exit portal.\n\n## Core loop\n\n- **Roll & Momentum**: Roll and steer the bouncy red sphere across floating platforms with responsive momentum physics.\n- **Collect Golden Hoops**: Navigate jumping arcs and ramps to leap through 5 floating golden hoops, triggering melodic chimes.\n- **Rubber Trampoline Launches**: Hit spring-loaded yellow bounce pads to gain massive vertical airtime to reach elevated ledges.\n- **Hazard Navigation**: Dodge sharp red crystal spikes; collisions instantly pop the ball and trigger checkpoint respawns.\n- **Exit Portal Speedrun**: Unlock the swirling dimensional portal once all 5 hoops are collected, completing the stage with a personal speedrun record.\n\n## World & look\n\nA sunny, cheerful arcade dreamscape of floating green island platforms with stone borders suspended in a bright turquoise sky with fluffy stylized low-poly clouds. Floating golden rings gleam with metallic specular highlights. Vibrant yellow trampolines with visible steel accordion springs. Red geometric crystal spikes warn of peril. A magical swirling cyan-magenta vortex portal marks the \n\nDepict the world and atmosphere as a single illustrated scene. Low-poly art with flat-shaded facets and hard edges on every object, no cubes, no voxels, rendered as a highly polished 3D scene with the craft of a Pixar-quality animated film, cinematic lighting that fits the scene, soft ambient occlusion, rich detail and expressive composition. Wordless illustration, no text, no title, no words, no letters, no logos, no UI.",
+      "size": 91680
     },
     {
       "id": "7f689664-16dd-4046-82ba-c4879d81d33c",

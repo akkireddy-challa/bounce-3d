@@ -41,9 +41,14 @@ export class BounceCourseManager {
     private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
     private checkpointIndex: number = 0;
 
-    // Ball Squash & Stretch Physics Animation
+    // Ball Squash, Stretch, Shadow, and Particle Animation
     private ballScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
     private targetBallScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
+    private shadowMesh: THREE.Mesh | null = null;
+    private squishWobbleTimer: number = 0;
+    private wasGrounded: boolean = true;
+    private sparklePool: THREE.Mesh[] = [];
+    private activeSparkles: { mesh: THREE.Mesh; life: number; maxLife: number }[] = [];
 
     // Audio Context (Procedural Web Audio API)
     private audioCtx: AudioContext | null = null;
@@ -204,6 +209,30 @@ export class BounceCourseManager {
             osc.start(now + idx * 0.12);
             osc.stop(now + idx * 0.12 + 0.6);
         });
+    }
+
+    public playBounceThud(impactSpeed: number = 1.0): void {
+        this.resumeAudio();
+        if (!this.audioCtx) return;
+        const now = this.audioCtx.currentTime;
+
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+
+        const baseFreq = Math.min(130, 85 + impactSpeed * 3.5);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(32, now + 0.12);
+
+        const vol = Math.min(0.35, 0.12 + impactSpeed * 0.02);
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+        osc.connect(gain);
+        gain.connect(this.audioCtx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.13);
     }
 
     private initHUD(): void {
@@ -423,28 +452,30 @@ export class BounceCourseManager {
         this.ballVisual.name = 'Bounce3D_BallVisualGroup';
 
         const radius = 0.55;
-        const sphereGeo = new THREE.SphereGeometry(radius, 32, 32);
+        // Faceted low-poly diamond ruby sphere matching reference artwork
+        const sphereGeo = new THREE.IcosahedronGeometry(radius, 2);
         const sphereMat = new THREE.MeshStandardMaterial({
-            color: 0xEF4444, // Candy-apple red
-            roughness: 0.12, // High-gloss sheen
+            color: 0xEF4444, // Candy-apple red faceted ruby
+            roughness: 0.16, // High-gloss sheen
             metalness: 0.25, // Specular bounce
-            emissive: 0x660000,
-            emissiveIntensity: 0.25
+            flatShading: true, // Visible gem-cut polygonal facets!
+            emissive: 0x7F1D1D,
+            emissiveIntensity: 0.35
         });
 
         this.ballInnerMesh = new THREE.Mesh(sphereGeo, sphereMat);
         this.ballInnerMesh.castShadow = true;
         this.ballInnerMesh.receiveShadow = true;
 
-        // Shiny white specular highlight
-        const shineGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        // Faceted diamond specular highlight glints
+        const shineGeo = new THREE.OctahedronGeometry(0.11, 0);
         const shineMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
         const shineMesh = new THREE.Mesh(shineGeo, shineMat);
-        shineMesh.position.set(0.2, 0.3, 0.4);
+        shineMesh.position.set(0.22, 0.32, 0.38);
         this.ballInnerMesh.add(shineMesh);
 
-        // Secondary rim highlight
-        const rimGeo = new THREE.SphereGeometry(0.06, 12, 12);
+        // Secondary rim facet glint
+        const rimGeo = new THREE.OctahedronGeometry(0.06, 0);
         const rimMat = new THREE.MeshBasicMaterial({ color: 0xFECACA });
         const rimMesh = new THREE.Mesh(rimGeo, rimMat);
         rimMesh.position.set(-0.28, -0.15, 0.38);
@@ -458,7 +489,65 @@ export class BounceCourseManager {
 
         this.ballVisual.position.copy(this.spawnCheckpoint);
         this.scene.add(this.ballVisual);
+
+        // Ground Drop Shadow Decal (Grounded projection circle)
+        const shadowGeo = new THREE.CircleGeometry(0.65, 32);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            color: 0x090D16,
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        this.shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+        this.shadowMesh.rotation.x = -Math.PI / 2;
+        this.shadowMesh.position.set(this.spawnCheckpoint.x, 3.76, this.spawnCheckpoint.z);
+        this.scene.add(this.shadowMesh);
+
+        // Initialize reusable pool of speed sparkle particles
+        const sparkleGeo = new THREE.OctahedronGeometry(0.08, 0);
+        const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xFBBF24, transparent: true, opacity: 0.9 });
+        for (let i = 0; i < 16; i++) {
+            const sparkle = new THREE.Mesh(sparkleGeo, sparkleMat.clone());
+            sparkle.visible = false;
+            this.scene.add(sparkle);
+            this.sparklePool.push(sparkle);
+        }
+
         console.log('🔴 Bounce 3D Ball Visual attached to scene!');
+    }
+
+    private spawnSpeedSparkle(pos: THREE.Vector3): void {
+        const available = this.sparklePool.find(p => !p.visible);
+        if (!available) return;
+
+        available.visible = true;
+        available.position.set(
+            pos.x + (Math.random() - 0.5) * 0.4,
+            pos.y + 0.3 + (Math.random() - 0.5) * 0.3,
+            pos.z + (Math.random() - 0.5) * 0.4
+        );
+        available.scale.set(1.0, 1.0, 1.0);
+        (available.material as THREE.MeshBasicMaterial).opacity = 0.9;
+        this.activeSparkles.push({ mesh: available, life: 0, maxLife: 0.35 });
+    }
+
+    private updateSpeedSparkles(deltaTime: number): void {
+        for (let i = this.activeSparkles.length - 1; i >= 0; i--) {
+            const item = this.activeSparkles[i];
+            if (!item) continue;
+            item.life += deltaTime;
+            if (item.life >= item.maxLife) {
+                item.mesh.visible = false;
+                this.activeSparkles.splice(i, 1);
+            } else {
+                const progress = item.life / item.maxLife;
+                const scale = 1.0 - progress * 0.7;
+                item.mesh.scale.set(scale, scale, scale);
+                item.mesh.position.y += deltaTime * 0.8;
+                (item.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1.0 - progress);
+            }
+        }
     }
 
     /**
@@ -513,8 +602,8 @@ export class BounceCourseManager {
             innerGrassMesh.position.y = 0.25;
             island.add(innerGrassMesh);
 
-            // Beveled stone cliff rim
-            const cliffGeo = new THREE.CylinderGeometry(cfg.radius * 0.98, cfg.radius * 0.85, 0.6, 24);
+            // Beveled faceted stone cliff rim
+            const cliffGeo = new THREE.CylinderGeometry(cfg.radius * 0.98, cfg.radius * 0.85, 0.8, 14);
             const cliffMat = new THREE.MeshStandardMaterial({
                 color: 0x64748B, // Slate stone
                 roughness: 0.8,
@@ -522,20 +611,21 @@ export class BounceCourseManager {
                 flatShading: true
             });
             const cliffMesh = new THREE.Mesh(cliffGeo, cliffMat);
-            cliffMesh.position.y = -0.25;
+            cliffMesh.position.y = -0.3;
             island.add(cliffMesh);
 
-            // Shallow stone underside disc
-            const baseGeo = new THREE.CylinderGeometry(cfg.radius * 0.85, cfg.radius * 0.5, 0.8, 16);
-            const baseMat = new THREE.MeshStandardMaterial({
-                color: 0x475569, // Slate stone
-                roughness: 0.85,
+            // Deep inverted tapered rock stalactite keel hanging below the island (Reference Artwork)
+            const keelHeight = cfg.radius * 1.5;
+            const keelGeo = new THREE.CylinderGeometry(cfg.radius * 0.85, 0.35, keelHeight, 7);
+            const keelMat = new THREE.MeshStandardMaterial({
+                color: 0x475569, // Dark slate bedrock
+                roughness: 0.88,
                 metalness: 0.15,
                 flatShading: true
             });
-            const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-            baseMesh.position.y = -0.9;
-            island.add(baseMesh);
+            const keelMesh = new THREE.Mesh(keelGeo, keelMat);
+            keelMesh.position.y = - (keelHeight * 0.5) - 0.7;
+            island.add(keelMesh);
 
             // Island boundary ring matching tier theme
             const rimGeo = new THREE.TorusGeometry(cfg.radius, 0.14, 8, 28);
@@ -567,6 +657,36 @@ export class BounceCourseManager {
                     console.warn('Physics collider creation warning:', e);
                 }
             }
+        });
+
+        // 1b. Floating Satellite Rock Chunks Drifting around Islands (Reference Artwork)
+        const satelliteRockConfigs = [
+            { pos: new THREE.Vector3(-7.5, 4.8, 2.0), scale: new THREE.Vector3(1.1, 0.8, 0.9), color: 0x64748B },
+            { pos: new THREE.Vector3(7.2, 5.2, -4.5), scale: new THREE.Vector3(0.9, 1.2, 0.8), color: 0x475569 },
+            { pos: new THREE.Vector3(4.5, 3.2, -10.0), scale: new THREE.Vector3(1.0, 0.7, 1.1), color: 0x94A3B8 },
+            { pos: new THREE.Vector3(16.0, 6.0, -18.5), scale: new THREE.Vector3(1.3, 0.9, 1.0), color: 0x64748B },
+            { pos: new THREE.Vector3(6.5, 7.0, -23.5), scale: new THREE.Vector3(1.0, 1.1, 0.8), color: 0x475569 },
+            { pos: new THREE.Vector3(-15.5, 7.8, -31.0), scale: new THREE.Vector3(1.2, 0.9, 1.1), color: 0x64748B },
+            { pos: new THREE.Vector3(-6.0, 9.2, -35.5), scale: new THREE.Vector3(0.9, 1.0, 0.8), color: 0x94A3B8 },
+            { pos: new THREE.Vector3(6.8, 10.0, -43.0), scale: new THREE.Vector3(1.4, 1.1, 1.2), color: 0x475569 },
+            { pos: new THREE.Vector3(-6.8, 10.5, -45.0), scale: new THREE.Vector3(1.2, 1.3, 1.0), color: 0x64748B },
+            { pos: new THREE.Vector3(0, 12.0, -49.0), scale: new THREE.Vector3(1.5, 1.0, 1.3), color: 0x334155 },
+        ];
+
+        satelliteRockConfigs.forEach(src => {
+            const satGeo = new THREE.DodecahedronGeometry(0.8, 0);
+            const satMat = new THREE.MeshStandardMaterial({
+                color: src.color,
+                roughness: 0.85,
+                metalness: 0.15,
+                flatShading: true
+            });
+            const satMesh = new THREE.Mesh(satGeo, satMat);
+            satMesh.position.copy(src.pos);
+            satMesh.scale.copy(src.scale);
+            satMesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            satMesh.castShadow = true;
+            this.scene.add(satMesh);
         });
 
         // 2. Rolling Low-Poly Grassy Mounds on Islands (Wallpaper Contour)
@@ -936,13 +1056,15 @@ export class BounceCourseManager {
         ];
 
         hoopPositions.forEach((pos, idx) => {
-            const torusGeo = new THREE.TorusGeometry(1.4, 0.18, 16, 36);
+            // Faceted diamond-cut polygonal gold rings matching reference artwork
+            const torusGeo = new THREE.TorusGeometry(1.4, 0.22, 6, 16);
             const torusMat = new THREE.MeshStandardMaterial({
-                color: 0xFBBF24, // Gold
-                metalness: 0.85,
-                roughness: 0.15,
-                emissive: 0x92400E,
-                emissiveIntensity: 0.7
+                color: 0xFBBF24, // Gleaming gold
+                metalness: 0.9,
+                roughness: 0.16,
+                flatShading: true, // Diamond-cut polygonal gold facets!
+                emissive: 0xB45309,
+                emissiveIntensity: 0.65
             });
 
             const ringMesh = new THREE.Mesh(torusGeo, torusMat);
@@ -959,7 +1081,7 @@ export class BounceCourseManager {
             this.rings.push({ mesh: ringMesh, collected: false, light: ringLight });
         });
 
-        // 2. Yellow Rubber Trampolines with Visible Heavy Steel Springs & Bullseye
+        // 2. Coiled Steel Spring Trampolines with Beveled Yellow Collar & Dark Rubber Pad (Reference Artwork)
         const trampolineConfigs = [
             { pos: new THREE.Vector3(-2.4, 4.0, -1.8), launch: new THREE.Vector3(0, 21.0, 0), isVertical: true },   // Trampoline 1: Foreground vertical super leap
             { pos: new THREE.Vector3(2.5, 4.0, -5.5), launch: new THREE.Vector3(8.5, 20.0, -11.0), isVertical: false }, // Trampoline 2: Launch to Azure Terrace
@@ -972,85 +1094,87 @@ export class BounceCourseManager {
             const trampGroup = new THREE.Group();
             trampGroup.position.copy(pos);
 
-            // Sturdy tubular steel frame & legs
-            const frameMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9, roughness: 0.2 });
-            const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8);
-            [
-                { x: -1.2, z: -1.2 }, { x: 1.2, z: -1.2 },
-                { x: -1.2, z: 1.2 }, { x: 1.2, z: 1.2 }
-            ].forEach(lp => {
-                const leg = new THREE.Mesh(legGeo, frameMat);
-                leg.position.set(lp.x, 0.25, lp.z);
-                trampGroup.add(leg);
-            });
+            // Sturdy faceted dark steel base plate
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.85, roughness: 0.3, flatShading: true });
+            const basePlateGeo = new THREE.CylinderGeometry(1.2, 1.35, 0.15, 12);
+            const basePlate = new THREE.Mesh(basePlateGeo, baseMat);
+            basePlate.position.y = 0.08;
+            trampGroup.add(basePlate);
 
-            // Circular frame ring
-            const frameRingGeo = new THREE.TorusGeometry(1.5, 0.12, 12, 28);
-            const frameRing = new THREE.Mesh(frameRingGeo, frameMat);
-            frameRing.rotation.x = Math.PI / 2;
-            frameRing.position.y = 0.52;
-            trampGroup.add(frameRing);
-
-            // Large visible central chrome accordion compression spring
+            // Heavy coiled steel industrial compression spring column
             const springGroup = new THREE.Group();
-            const coilMat = new THREE.MeshStandardMaterial({ color: 0xE2E8F0, metalness: 0.95, roughness: 0.1 });
-            [0.12, 0.24, 0.36, 0.48].forEach(cy => {
-                const coil = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.08, 8, 20), coilMat);
+            const coilMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.92, roughness: 0.18, flatShading: true });
+            [0.18, 0.32, 0.46, 0.60].forEach(cy => {
+                const coil = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.11, 8, 20), coilMat);
                 coil.rotation.x = Math.PI / 2;
                 coil.position.y = cy;
                 springGroup.add(coil);
             });
             trampGroup.add(springGroup);
 
-            // Vibrant yellow rubber trampoline bounce pad
-            const padGeo = new THREE.CylinderGeometry(1.3, 1.35, 0.18, 24);
-            const padMat = new THREE.MeshStandardMaterial({
+            // Faceted beveled sunflower-yellow rim collar (Reference Artwork)
+            const collarGeo = new THREE.CylinderGeometry(1.48, 1.32, 0.34, 14);
+            const collarMat = new THREE.MeshStandardMaterial({
                 color: 0xFACC15, // Bright sun yellow
-                roughness: 0.15,
-                metalness: 0.1,
+                roughness: 0.22,
+                metalness: 0.18,
+                flatShading: true,
                 emissive: 0x854D0E,
-                emissiveIntensity: 0.5
+                emissiveIntensity: 0.45
+            });
+            const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+            collarMesh.position.y = 0.72;
+            collarMesh.castShadow = true;
+            trampGroup.add(collarMesh);
+
+            // Dark recessed rubber trampoline bounce pad
+            const padGeo = new THREE.CylinderGeometry(1.26, 1.26, 0.12, 20);
+            const padMat = new THREE.MeshStandardMaterial({
+                color: 0x0F172A, // Dark graphite rubber
+                roughness: 0.75,
+                metalness: 0.1,
+                flatShading: true
             });
             const padMesh = new THREE.Mesh(padGeo, padMat);
-            padMesh.position.y = 0.58;
+            padMesh.position.y = 0.82;
             padMesh.castShadow = true;
             trampGroup.add(padMesh);
 
-            // Bold white bullseye ring
-            const bullseyeGeo = new THREE.RingGeometry(0.55, 0.9, 24);
-            const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+            // Bold yellow bullseye ring
+            const bullseyeGeo = new THREE.RingGeometry(0.55, 0.88, 20);
+            const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide });
             const bullseye = new THREE.Mesh(bullseyeGeo, bullseyeMat);
             bullseye.rotation.x = -Math.PI / 2;
-            bullseye.position.y = 0.68;
+            bullseye.position.y = 0.89;
             trampGroup.add(bullseye);
 
             // Red center target star
-            const starGeo = new THREE.CircleGeometry(0.35, 16);
+            const starGeo = new THREE.CircleGeometry(0.32, 16);
             const starMat = new THREE.MeshBasicMaterial({ color: 0xEF4444, side: THREE.DoubleSide });
             const star = new THREE.Mesh(starGeo, starMat);
             star.rotation.x = -Math.PI / 2;
-            star.position.y = 0.69;
+            star.position.y = 0.90;
             trampGroup.add(star);
 
-            // Upward bounce chevrons (^ ^ ^)
+            // Upward bounce chevrons (^ ^ ^) in bright white
             const chevronMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
             [-0.2, 0.0, 0.2].forEach((cz) => {
                 const arm1 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
                 arm1.rotation.x = -Math.PI / 2;
                 arm1.rotation.z = Math.PI / 4;
-                arm1.position.set(-0.07, 0.70, cz);
+                arm1.position.set(-0.07, 0.91, cz);
                 trampGroup.add(arm1);
 
                 const arm2 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
                 arm2.rotation.x = -Math.PI / 2;
                 arm2.rotation.z = -Math.PI / 4;
-                arm2.position.set(0.07, 0.70, cz);
+                arm2.position.set(0.07, 0.91, cz);
                 trampGroup.add(arm2);
             });
 
             // Upward bouncing light aura
             const trampLight = new THREE.PointLight(0xFACC15, 2.5, 6);
-            trampLight.position.y = 1.0;
+            trampLight.position.y = 1.2;
             trampGroup.add(trampLight);
 
             this.scene.add(trampGroup);
@@ -1127,25 +1251,88 @@ export class BounceCourseManager {
             this.spikes.push({ mesh: spikeGroup, position: pos });
         });
 
-        // 4. Magical Swirling Cyan-Magenta Exit Portal on Golden Victory Citadel
+        // 4. Ancient Faceted Stone Archway Portal with Twin Purple Brazier Pillars & Stone Steps (Reference Artwork)
         const portalGroup = new THREE.Group();
         portalGroup.position.set(0, 11.2, -42.0);
 
-        // Grand Dimensional Archway (Cyan glowing gate)
-        const portalRingGeo = new THREE.TorusGeometry(4.8, 0.45, 16, 40);
-        const portalRingMat = new THREE.MeshStandardMaterial({
-            color: 0x00FFFF, // Neon Cyan
-            metalness: 0.9,
-            roughness: 0.1,
-            emissive: 0x00FFFF,
-            emissiveIntensity: 1.2
+        // Ancient Faceted Stone Block Arch
+        const stoneArchGeo = new THREE.TorusGeometry(4.6, 0.65, 6, 16);
+        const stoneArchMat = new THREE.MeshStandardMaterial({
+            color: 0x94A3B8, // Ancient slate stone
+            roughness: 0.85,
+            metalness: 0.15,
+            flatShading: true
         });
-        const portalRingMesh = new THREE.Mesh(portalRingGeo, portalRingMat);
-        portalRingMesh.castShadow = true;
-        portalGroup.add(portalRingMesh);
+        const stoneArch = new THREE.Mesh(stoneArchGeo, stoneArchMat);
+        stoneArch.castShadow = true;
+        portalGroup.add(stoneArch);
+
+        // Stone pillar vertical foundation columns
+        const pillarGeo = new THREE.CylinderGeometry(0.85, 1.1, 4.8, 6);
+        [-4.2, 4.2].forEach(px => {
+            const pillar = new THREE.Mesh(pillarGeo, stoneArchMat);
+            pillar.position.set(px, -2.4, 0);
+            pillar.castShadow = true;
+            portalGroup.add(pillar);
+        });
+
+        // Twin Ceremonial Stone Brazier Pillars with Mystical Purple Flame Lanterns (Reference Artwork)
+        const brazierPedestalGeo = new THREE.CylinderGeometry(0.55, 0.75, 2.6, 6);
+        const brazierBowlGeo = new THREE.CylinderGeometry(0.85, 0.5, 0.65, 6);
+        const brazierFlameGeo = new THREE.OctahedronGeometry(0.48, 0);
+        const brazierFlameMat = new THREE.MeshStandardMaterial({
+            color: 0xC084FC, // Mystical violet crystal flame
+            metalness: 0.2,
+            roughness: 0.1,
+            flatShading: true,
+            emissive: 0x9333EA,
+            emissiveIntensity: 2.2
+        });
+
+        [-6.4, 6.4].forEach(bx => {
+            const brazierGroup = new THREE.Group();
+            brazierGroup.position.set(bx, -2.2, 0.6);
+
+            const pedestal = new THREE.Mesh(brazierPedestalGeo, stoneArchMat);
+            pedestal.position.y = 1.3;
+            brazierGroup.add(pedestal);
+
+            const bowl = new THREE.Mesh(brazierBowlGeo, stoneArchMat);
+            bowl.position.y = 2.8;
+            brazierGroup.add(bowl);
+
+            const flame = new THREE.Mesh(brazierFlameGeo, brazierFlameMat);
+            flame.position.y = 3.35;
+            brazierGroup.add(flame);
+
+            const brazierLight = new THREE.PointLight(0xA855F7, 3.5, 9);
+            brazierLight.position.y = 3.5;
+            brazierGroup.add(brazierLight);
+
+            portalGroup.add(brazierGroup);
+        });
+
+        // Stone Staircase leading from Citadel path up to Portal Threshold
+        const stepMat = new THREE.MeshStandardMaterial({
+            color: 0x64748B,
+            roughness: 0.85,
+            metalness: 0.15,
+            flatShading: true
+        });
+        [
+            { y: -2.8, z: 2.4, w: 4.8, h: 0.35, d: 0.9 },
+            { y: -2.45, z: 1.5, w: 4.5, h: 0.35, d: 0.9 },
+            { y: -2.1, z: 0.6, w: 4.2, h: 0.35, d: 0.9 },
+        ].forEach(st => {
+            const stepGeo = new THREE.BoxGeometry(st.w, st.h, st.d);
+            const stepMesh = new THREE.Mesh(stepGeo, stepMat);
+            stepMesh.position.set(0, st.y, st.z);
+            stepMesh.receiveShadow = true;
+            portalGroup.add(stepMesh);
+        });
 
         // Concentric Swirling Vortex Disk 1: Outer Electric Cyan Spiral
-        const outerVortexGeo = new THREE.RingGeometry(2.5, 4.5, 32);
+        const outerVortexGeo = new THREE.RingGeometry(2.3, 4.1, 32);
         const outerVortexMat = new THREE.MeshBasicMaterial({
             color: 0x06B6D4, // Electric Cyan
             side: THREE.DoubleSide,
@@ -1157,7 +1344,7 @@ export class BounceCourseManager {
         portalGroup.add(outerVortex);
 
         // Concentric Swirling Vortex Disk 2: Vivid Neon Magenta Spiral Core
-        const innerVortexGeo = new THREE.CircleGeometry(2.6, 32);
+        const innerVortexGeo = new THREE.CircleGeometry(2.4, 32);
         const innerVortexMat = new THREE.MeshBasicMaterial({
             color: 0xFF00FF, // Pure Neon Magenta
             side: THREE.DoubleSide,
@@ -1169,11 +1356,12 @@ export class BounceCourseManager {
         portalGroup.add(innerVortex);
 
         // Floating Brilliant Golden Star at Portal Crest
-        const starGeo = new THREE.OctahedronGeometry(1.2);
+        const starGeo = new THREE.OctahedronGeometry(1.2, 0);
         const starMat = new THREE.MeshStandardMaterial({
             color: 0xFBBF24,
             metalness: 0.9,
             roughness: 0.1,
+            flatShading: true,
             emissive: 0xF59E0B,
             emissiveIntensity: 1.0
         });
@@ -1210,7 +1398,23 @@ export class BounceCourseManager {
 
         const playerPos = this.player.position;
 
-        // 0. Update Red Ball Visual: Sync position, realistic rolling, and squish/stretch physics
+        // Calculate ground elevation beneath the player
+        let groundY = 0.5; // Water base
+        if (Math.hypot(playerPos.x - 0, playerPos.z - (-1.0)) < 6.8) groundY = 3.76;
+        else if (Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0)) < 5.6) groundY = 4.86;
+        else if (Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0)) < 5.6) groundY = 6.46;
+        else if (Math.hypot(playerPos.x - 0, playerPos.z - (-42.0)) < 7.6) groundY = 8.26;
+
+        // Dynamic Drop Shadow Projection
+        if (this.shadowMesh) {
+            this.shadowMesh.position.set(playerPos.x, groundY + 0.02, playerPos.z);
+            const heightAboveGround = Math.max(0, playerPos.y - groundY);
+            const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.05);
+            this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+            (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.45 - heightAboveGround * 0.035);
+        }
+
+        // 0. Update Red Ball Visual: Sync position, rolling rotation, squish/stretch, and idle breathing
         if (this.ballVisual) {
             this.ballVisual.position.copy(playerPos);
             this.ballVisual.position.y += 0.55;
@@ -1218,29 +1422,68 @@ export class BounceCourseManager {
             if (this.ballInnerMesh && this.lastPlayerPos) {
                 const dx = playerPos.x - this.lastPlayerPos.x;
                 const dz = playerPos.z - this.lastPlayerPos.z;
-                // Realistic rolling along movement direction
+                // Smooth rolling along exact movement direction
                 this.ballInnerMesh.rotation.z -= dx * 2.0;
                 this.ballInnerMesh.rotation.x += dz * 2.0;
             }
             this.lastPlayerPos.copy(playerPos);
 
-            // Dynamic squash & stretch physics based on vertical velocity
+            // Dynamic squash, stretch, and landing impact physics
             if (this.playerController?.playerBody && this.ballInnerMesh) {
                 const body = this.playerController.playerBody;
                 if (typeof body.linvel === 'function') {
-                    const vy = body.linvel().y;
-                    if (vy > 4.0) {
-                        this.targetBallScale.set(0.86, 1.28, 0.86); // Soaring upward stretch
-                    } else if (vy < -5.0) {
-                        this.targetBallScale.set(0.92, 1.18, 0.92); // Falling downward stretch
+                    const linvel = body.linvel();
+                    const vy = linvel.y;
+                    const horizSpeed = Math.hypot(linvel.x, linvel.z);
+                    const heightAboveGround = Math.max(0, playerPos.y - groundY);
+                    const isGroundedNow = heightAboveGround < 0.65;
+
+                    // Landing impact detection: trigger rubber thud and jelly wobble
+                    if (!this.wasGrounded && isGroundedNow && vy <= 0) {
+                        this.squishWobbleTimer = 0.32;
+                        const impactSpeed = Math.abs(vy);
+                        if (impactSpeed > 2.0) {
+                            this.playBounceThud(impactSpeed);
+                        }
+                    }
+                    this.wasGrounded = isGroundedNow;
+
+                    // Squash & stretch physics behavior
+                    if (this.squishWobbleTimer > 0) {
+                        this.squishWobbleTimer -= deltaTime;
+                        const progress = Math.max(0, this.squishWobbleTimer / 0.32);
+                        const wobble = Math.sin((1.0 - progress) * Math.PI * 4) * progress;
+                        this.ballScale.y = 1.0 - wobble * 0.38;
+                        this.ballScale.x = 1.0 + wobble * 0.2;
+                        this.ballScale.z = 1.0 + wobble * 0.2;
+                    } else if (vy > 3.5) {
+                        // Rising fast in the air
+                        this.targetBallScale.set(0.85, 1.25, 0.85);
+                        this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
+                    } else if (vy < -4.5) {
+                        // Falling fast
+                        this.targetBallScale.set(0.9, 1.18, 0.9);
+                        this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
+                    } else if (horizSpeed < 0.25) {
+                        // Idle breathing hover bob (alive character feel)
+                        const breath = Math.sin(this.gameTime * 4.0);
+                        this.targetBallScale.set(1.0 + breath * 0.03, 1.0 - breath * 0.04, 1.0 + breath * 0.03);
+                        this.ballScale.lerp(this.targetBallScale, deltaTime * 8.0);
                     } else {
-                        this.targetBallScale.set(1.0, 1.0, 1.0);    // Rest / ground roll
+                        // Normal ground rolling
+                        this.targetBallScale.set(1.0, 1.0, 1.0);
+                        this.ballScale.lerp(this.targetBallScale, deltaTime * 14.0);
+                    }
+
+                    // Speed sparkle particle trail
+                    if (horizSpeed > 4.2 || Math.abs(vy) > 5.5) {
+                        this.spawnSpeedSparkle(playerPos);
                     }
                 }
-                this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
                 this.ballInnerMesh.scale.copy(this.ballScale);
             }
         }
+        this.updateSpeedSparkles(deltaTime);
 
         // 1. Golden Hoops: rotate & check pass-through
         this.rings.forEach(ring => {
