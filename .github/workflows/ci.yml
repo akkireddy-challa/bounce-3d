@@ -1,0 +1,38 @@
+name: CI - Build & Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Verify Project Integrity & CLI Tools
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Bitmagic Engine CLI
+        run: npm install -g @bitmagic/cli
+
+      - name: Verify Bitmagic CLI Installation
+        run: bitmagic --version
+
+      - name: Verify Project Architecture Files
+        run: |
+          test -f GAME-DESIGN.md
+          test -f AGENT-PROMPT.md
+          test -f AGENTS.md
+          test -f CLAUDE.md
+          test -f SPEC.md
+          test -f TEAM-PLAYBOOK.md
+          test -f QR-SHOWCASE.html
+          echo "All Bounce 3D architectural definitions verified successfully!"

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔴 Bounce 3D — Nokia Legend Reborn | Live Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070B14;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --red: #EF4444;
+      --gold: #FBBF24;
+      --green: #10B981;
+      --cyan: #06B6D4;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient Glow & Canvas */
+    #bgCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 10;
+      width: 95%;
+      max-width: 1300px;
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    /* Left Card: QR & Branding */
+    .qr-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 28px;
+      padding: 40px;
+      text-align: center;
+      box-shadow: 0 25px 60px -15px rgba(239, 68, 68, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .qr-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 50% 20%, rgba(239, 68, 68, 0.15), transparent 60%);
+      pointer-events: none;
+    }
+
+    .event-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #F87171;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--green);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    h1 {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #FFF 0%, #EF4444 60%, #FBBF24 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-size: 19px;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    /* QR Code Display */
+    .qr-frame {
+      display: inline-block;
+      background: #FFFFFF;
+      padding: 18px;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(239, 68, 68, 0.35);
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .qr-frame img, .qr-frame canvas {
+      display: block;
+      width: 240px;
+      height: 240px;
+      border-radius: 8px;
+    }
+
+    .scan-cta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    /* Right Card: Leaderboard & Nokia 3D Demo */
+    .leaderboard-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(251, 191, 36, 0.25);
+      border-radius: 28px;
+      padding: 36px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .card-header h2 {
+      font-size: 24px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #F8FAFC;
+    }
+
+    .rank-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .rank-table th {
+      text-align: left;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding-bottom: 12px;
+    }
+
+    .rank-table td {
+      padding: 12px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 15px;
+    }
+
+    .rank-badge {
+      display: inline-block;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      border-radius: 50%;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .rank-1 { background: var(--gold); color: #000; box-shadow: 0 0 10px rgba(251, 191, 36, 0.5); }
+    .rank-2 { background: #94A3B8; color: #000; }
+    .rank-3 { background: #B45309; color: #FFF; }
+
+    .score-val {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    /* Bottom Ballot Banner */
+    .vote-banner {
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.2), rgba(251, 191, 36, 0.2));
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 16px;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    /* Controls Bar */
+    .footer-bar {
+      position: relative;
+      z-index: 10;
+      margin-top: 10px;
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-bar span {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+  <!-- QRCode.js for dynamic generation -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- Background 3D Canvas -->
+  <canvas id="bgCanvas"></canvas>
+
+  <div class="container">
+    <!-- Left: QR Card -->
+    <div class="qr-card">
+      <div class="event-badge">
+        <span class="pulse-dot"></span>
+        AWS Stockholm &bull; Bitmagic Game Jam
+      </div>
+      <h1>Bounce 3D</h1>
+      <p class="tagline">The classic Nokia legend reborn in 3D physics!</p>
+
+      <div class="qr-frame">
+        <canvas id="qrCodeCanvas"></canvas>
+      </div>
+
+      <div class="scan-cta">
+        <span>📱 POINT YOUR PHONE CAMERA & PLAY!</span>
+      </div>
+      <p style="font-size: 13px; color: var(--muted); margin-top: 8px;">
+        Zero App Download Required &bull; Runs 60 FPS in Mobile Browser
+      </p>
+    </div>
+
+    <!-- Right: Live Leaderboard -->
+    <div class="leaderboard-card">
+      <div class="card-header">
+        <h2>🏆 Live Speedrun Board</h2>
+        <span style="font-size: 13px; color: var(--gold); font-family: 'JetBrains Mono', monospace; font-weight: 700;">STAGE 1 • ALL HOOPS</span>
+      </div>
+
+      <table class="rank-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Player</th>
+            <th>Rings</th>
+            <th>Clear Time</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody">
+          <tr>
+            <td><span class="rank-badge rank-1">1</span></td>
+            <td><strong>Ilmari (Host)</strong></td>
+            <td>5 / 5 🟡</td>
+            <td class="score-val">28.4s ⚡</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge rank-2">2</span></td>
+            <td><strong>Markus (Bitmagic)</strong></td>
+            <td>5 / 5 🟡</td>
+            <td class="score-val">31.2s</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge rank-3">3</span></td>
+            <td><strong>Akkireddy (Telia)</strong></td>
+            <td>5 / 5 🟡</td>
+            <td class="score-val">34.8s</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge">4</span></td>
+            <td><strong>Strawberry VIP</strong></td>
+            <td>5 / 5 🟡</td>
+            <td class="score-val">39.1s</td>
+          </tr>
+          <tr>
+            <td><span class="rank-badge">5</span></td>
+            <td><strong>AWS Cloud Guest</strong></td>
+            <td>4 / 5 🟡</td>
+            <td class="score-val">46.5s</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="vote-banner">
+        <span>🗳️</span>
+        <span>Loved the Nokia Nostalgia? <strong>Vote for Bounce 3D in the ballot!</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-bar">
+    <span>Press <b>F</b> for Fullscreen</span>
+    <span>Engine: Bitmagic Rapier 3D</span>
+    <span>Creators: Akkireddy Challa & Co-Engineer</span>
+  </div>
+
+  <script>
+    // 1. Dynamic QR Code pointing to your live game
+    const defaultPlayUrl = "https://bitmagic.ai";
+    const qrCanvas = document.getElementById('qrCodeCanvas');
+    
+    // Check if URL has custom play link, e.g., ?play=https://...
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetUrl = urlParams.get('play') || defaultPlayUrl;
+
+    QRCode.toCanvas(qrCanvas, targetUrl, {
+      width: 240,
+      margin: 1,
+      color: {
+        dark: '#0B1120',
+        light: '#FFFFFF'
+      }
+    });
+
+    // 2. Fullscreen hotkey
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+    });
+
+    // 3. Simple floating particle background
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const particles = Array.from({ length: 45 }, () => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      radius: Math.random() * 3 + 1,
+      vx: (Math.random() - 0.5) * 0.8,
+      vy: (Math.random() - 0.5) * 0.8,
+      color: Math.random() > 0.5 ? '#EF4444' : '#FBBF24',
+      alpha: Math.random() * 0.5 + 0.2
+    }));
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.alpha;
+        ctx.fill();
+      });
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
