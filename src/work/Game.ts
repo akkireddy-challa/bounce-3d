@@ -141,6 +141,7 @@ export class VoxelGame implements GenreGameInterface {
                 throw new Error('WorldGenerator failed to create world object');
             }
 
+
             // Ground physics is now created automatically with visual chunks via generateGroundChunks()
             // which properly tracks both visual mesh and physics body together.
             // Physics bodies are added to physics world during chunk generation.
@@ -201,7 +202,8 @@ export class VoxelGame implements GenreGameInterface {
                 this.bounceManager = new BounceCourseManager(
                     this.engine.scene,
                     this.player,
-                    this.playerController
+                    this.playerController,
+                    this.engine
                 );
             }
 
@@ -211,8 +213,16 @@ export class VoxelGame implements GenreGameInterface {
 
             console.log('✅ Game loaded - waiting for Play button');
 
+            // Disable generic debug controls tooltip in favor of Nokia Bounce arcade HUD
+            this.hud.setControlsGuideEnabled(false);
+
             // Show the HUD
             this.hud.show();
+
+            // Play generated Nokia Bounce 3D arcade soundtrack
+            this.engine.playMusic('7f689664-16dd-4046-82ba-c4879d81d33c', { loop: true, fadeIn: 1.0, volume: 0.65 }).catch((err) => {
+                console.log('Background music auto-play deferred until user interaction:', err);
+            });
 
             // Load custom animations in the background (non-blocking)
             this.loadCustomAnimations().catch(error => {
@@ -244,6 +254,17 @@ export class VoxelGame implements GenreGameInterface {
             // Fall back to ThirdPersonCamera for backward compatibility if no active controller
             this.cameraController = (this.cameraManager.getActiveController() as ThirdPersonCamera) 
                 ?? this.cameraManager.getThirdPersonCamera();
+
+            // Nokia Bounce 3D: Wide cinematic platformer framing
+            if (this.cameraController) {
+                this.cameraController.distance = 7.0;
+                this.cameraController.height = 3.6;
+                this.cameraController.lookAtHeight = 1.1;
+                this.cameraController.targetSpherical.radius = 7.0;
+                this.cameraController.targetSpherical.phi = Math.PI / 2.6;
+                this.cameraController.spherical.radius = 7.0;
+                this.cameraController.spherical.phi = Math.PI / 2.6;
+            }
         }
     }
 

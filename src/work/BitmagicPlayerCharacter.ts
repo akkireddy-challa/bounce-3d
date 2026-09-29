@@ -88,7 +88,7 @@ export function createBitmagicBlockCharacter(characterGroup: THREE.Group) {
   ballMesh.name = 'bounce_ball_main';
   ballMesh.castShadow = true;
   ballMesh.receiveShadow = true;
-  ballMesh.position.set(0, ballRadius, 0);
+  ballMesh.position.set(0, 0, 0);
 
   // Add glossy white specular highlight reflection spot
   const shineGeo = new THREE.SphereGeometry(0.09, 16, 16);
@@ -104,10 +104,10 @@ export function createBitmagicBlockCharacter(characterGroup: THREE.Group) {
   rimShineMesh.position.set(-0.25, -0.1, 0.35);
   ballMesh.add(rimShineMesh);
 
-  // Attach to spine or root
-  const spineGroup = characterGroup.getObjectByName('spine') as THREE.Group;
-  if (spineGroup) {
-    spineGroup.add(ballMesh);
+  // Attach to torso group (captured as STANDARD_PART_NAME by BlockCharacterRenderer)
+  const torsoGroup = characterGroup.getObjectByName('torso') as THREE.Group;
+  if (torsoGroup) {
+    torsoGroup.add(ballMesh);
   } else {
     characterGroup.add(ballMesh);
   }
@@ -121,9 +121,6 @@ export function createBitmagicBlockCharacter(characterGroup: THREE.Group) {
   });
 }
 
-/**
- * No-op for eyes since the character is a rolling sphere
- */
-export function updateBitmagicEyeBlink(_deltaTime: number): void {
-  // Ball doesn't blink - no-op
+export function updateBitmagicEyeBlink(_deltaTime: number) {
+  // Pure sphere doesn't require eye blinking
 }
