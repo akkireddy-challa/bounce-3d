@@ -1,39 +1,5 @@
-# Dependencies
-node_modules/
-.pnpm-store/
-.npm/
-
-# Bitmagic CLI & Engine Artifacts
-.bitmagic/
-.bitmagic-cli/
-.vite/
-.vite-cache/
 dist/
+node_modules/
+.bitmagic/
+.vite-cache/
 build/
-
-# Environment Variables & Secret Keys
-.env
-.env.*
-!.env.example
-*.key
-*.pem
-credentials.json
-
-# Operating System Files
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*~
-
-# IDE & Editor Configs
-.idea/
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-
-# Test & Coverage Outputs
-coverage/
-*.lcov
-test-results/
-playwright-report/

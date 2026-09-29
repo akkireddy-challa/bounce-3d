@@ -1,0 +1,13 @@
+{
+  "gameId": "S691S3C0Q4WY",
+  "engineVersion": "3.1259",
+  "genre": "voxel",
+  "template": "empty-3d",
+  "environment": "prod",
+  "agents": [
+    "claude-code",
+    "cursor",
+    "kiro"
+  ],
+  "agentsMdHash": "d247284650badd272d67ad520fa7df404639e489f16479bbc50d51802b1c282a"
+}
