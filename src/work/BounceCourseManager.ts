@@ -14,7 +14,14 @@ export class BounceCourseManager {
 
     // Entities
     private rings: { mesh: THREE.Mesh; collected: boolean; light: THREE.PointLight }[] = [];
-    private trampolines: { mesh: THREE.Group; basePosition: THREE.Vector3; springMesh: THREE.Object3D; cooldown: number }[] = [];
+    private trampolines: {
+        mesh: THREE.Group;
+        basePosition: THREE.Vector3;
+        springMesh: THREE.Object3D;
+        cooldown: number;
+        launch: THREE.Vector3;
+        isVertical: boolean;
+    }[] = [];
     private spikes: { mesh: THREE.Group; position: THREE.Vector3 }[] = [];
     private exitPortal: { group: THREE.Group; unlocked: boolean; light: THREE.PointLight } | null = null;
     private floatingIslands: THREE.Group[] = [];
@@ -30,6 +37,7 @@ export class BounceCourseManager {
     public isWon: boolean = false;
     public gameTime: number = 0;
     private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
+    private checkpointIndex: number = 0;
 
     // Audio Context (Procedural Web Audio API)
     private audioCtx: AudioContext | null = null;
@@ -451,14 +459,15 @@ export class BounceCourseManager {
         });
 
         // 2. Yellow Rubber Trampolines with Visible Heavy Steel Springs & Bullseye
-        const trampolinePositions = [
-            new THREE.Vector3(-2.4, 4.0, -1.8),   // Trampoline 1: foreground left on Spawn Island
-            new THREE.Vector3(2.5, 4.0, -5.5),    // Trampoline 2: Spawn launch pad to Azure Terrace
-            new THREE.Vector3(9.5, 5.1, -19.5),   // Trampoline 3: Azure Terrace to Amethyst Pinnacle
-            new THREE.Vector3(-9.5, 6.7, -31.5),  // Trampoline 4: Amethyst Pinnacle to Golden Citadel
+        const trampolineConfigs = [
+            { pos: new THREE.Vector3(-2.4, 4.0, -1.8), launch: new THREE.Vector3(0, 21.0, 0), isVertical: true },   // Trampoline 1: Foreground vertical super leap
+            { pos: new THREE.Vector3(2.5, 4.0, -5.5), launch: new THREE.Vector3(8.5, 20.0, -11.0), isVertical: false }, // Trampoline 2: Launch to Azure Terrace
+            { pos: new THREE.Vector3(9.5, 5.1, -19.5), launch: new THREE.Vector3(-17.0, 22.5, -8.0), isVertical: false }, // Trampoline 3: Launch to Amethyst Pinnacle
+            { pos: new THREE.Vector3(-9.5, 6.7, -31.5), launch: new THREE.Vector3(8.5, 21.0, -9.5), isVertical: false }, // Trampoline 4: Launch to Golden Citadel
         ];
 
-        trampolinePositions.forEach((pos) => {
+        trampolineConfigs.forEach((cfg) => {
+            const pos = cfg.pos;
             const trampGroup = new THREE.Group();
             trampGroup.position.copy(pos);
 
@@ -544,7 +553,14 @@ export class BounceCourseManager {
             trampGroup.add(trampLight);
 
             this.scene.add(trampGroup);
-            this.trampolines.push({ mesh: trampGroup, basePosition: pos.clone(), springMesh: springGroup, cooldown: 0 });
+            this.trampolines.push({
+                mesh: trampGroup,
+                basePosition: pos.clone(),
+                springMesh: springGroup,
+                cooldown: 0,
+                launch: cfg.launch,
+                isVertical: cfg.isVertical
+            });
         });
 
         // 3. Red Geometric Crystal Spikes (Faceted Ruby Octahedrons with Bedrock Socket)
@@ -760,16 +776,49 @@ export class BounceCourseManager {
                     tramp.springMesh.scale.set(1.0, 1.0, 1.0);
                 }, 180);
 
-                // Apply massive upward impulse
+                // Apply trajectory launch impulse
                 if (this.playerController?.playerBody) {
                     const body = this.playerController.playerBody;
                     if (typeof body.setLinvel === 'function') {
-                        const curVel = body.linvel();
-                        body.setLinvel({ x: curVel.x * 1.2, y: 19.0, z: curVel.z * 1.2 }, true);
+                        if (tramp.isVertical) {
+                            const curVel = body.linvel();
+                            body.setLinvel({ x: curVel.x * 1.2, y: tramp.launch.y, z: curVel.z * 1.2 }, true);
+                        } else {
+                            body.setLinvel({ x: tramp.launch.x, y: tramp.launch.y, z: tramp.launch.z }, true);
+                        }
                     }
                 }
             }
         });
+
+        // 2b. Dynamic Island Checkpoints
+        if (this.checkpointIndex < 1) {
+            const distIsland2 = Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0));
+            if (distIsland2 < 4.5 && playerPos.y >= 3.5) {
+                this.checkpointIndex = 1;
+                this.spawnCheckpoint.set(10.5, 5.6, -17.0);
+                this.playChime();
+                this.showToast('🏁 CHECKPOINT 1: AZURE TERRACE!', '#38BDF8');
+            }
+        }
+        if (this.checkpointIndex < 2) {
+            const distIsland3 = Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0));
+            if (distIsland3 < 4.5 && playerPos.y >= 5.0) {
+                this.checkpointIndex = 2;
+                this.spawnCheckpoint.set(-10.5, 7.2, -29.0);
+                this.playChime();
+                this.showToast('🏁 CHECKPOINT 2: AMETHYST PINNACLE!', '#A855F7');
+            }
+        }
+        if (this.checkpointIndex < 3) {
+            const distIsland4 = Math.hypot(playerPos.x - 0, playerPos.z - (-42.0));
+            if (distIsland4 < 5.5 && playerPos.y >= 6.5) {
+                this.checkpointIndex = 3;
+                this.spawnCheckpoint.set(0, 9.0, -42.0);
+                this.playChime();
+                this.showToast('🏁 FINAL CHECKPOINT: GOLDEN CITADEL!', '#F59E0B');
+            }
+        }
 
         // 3. Red Hazard Spikes: damage & pop
         this.spikes.forEach(spike => {
