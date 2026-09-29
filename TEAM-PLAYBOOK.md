@@ -1,6 +1,6 @@
 # 👥 2-Person Hackathon Co-Op Playbook: Bounce 3D
 
-**Team**: Akkireddy Challa (Telia) & Co-Engineer (Strawberry)  
+**Team**: Akkireddy Challa (Telia) & Nishant Mattupalli (Strawberry)  
 **Event**: AWS & Bitmagic Game Jam (17:00 – 21:00) @ AWS Stockholm  
 **Target Outcome**: 1st Place Winner (Peer Vote + Judge Selection)  
 
@@ -12,7 +12,8 @@ To maximize your output in 4 hours, do not have both people looking at one termi
 
 ```
 ┌──────────────────────────────────────┐     ┌──────────────────────────────────────┐
-│       AKKIREDDY (Systems Lead)       │     │     CO-ENGINEER (Design Lead)        │
+│       AKKIREDDY (Systems Lead)       │     │         NISHANT (Design Lead)        │
+│       Data & AI Platform Engineer    │     │       Data Engineer @ Strawberry     │
 │                                      │     │                                      │
 │ • Bitmagic CLI & Claude Code Loops   │     │ • Level Choreography & Ring Layout   │
 │ • Rapier Physics & Ball Controller   │     │ • Mobile Device Playtesting (iPhone) │

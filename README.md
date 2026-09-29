@@ -117,7 +117,7 @@ npx serve . -p 8080
 
 Built by two passionate engineers in Stockholm:
 - **Akkireddy Challa** ([@akkireddy-challa](https://github.com/akkireddy-challa)) — Data & AI Platform Engineer at **Telia**. Overseeing CLI orchestration, agent directives, physics CCD, and continuous integration.
-- **Co-Builder & Friend** — Data & Infrastructure Engineer at **Strawberry Hotels**. Driving level design, game pacing, haptic feedback tuning, and mobile UX testing.
+- **Nishant Mattupalli** ([@nishmatt](https://github.com/nishmatt) · [LinkedIn](https://www.linkedin.com/in/nishant-mattupalli/)) — Data Engineer at **Strawberry**. Driving level design, game pacing, haptic feedback tuning, and mobile UX testing.
 
 Together, bringing the nostalgia of Nordic mobile gaming history into the agentic AI era.
 

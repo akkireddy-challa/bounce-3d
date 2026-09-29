@@ -2,7 +2,7 @@
 
 **Project Title**: Bounce 3D (The Nokia Legend Reborn)  
 **Target Event**: AWS & Bitmagic Game Jam @ AWS Stockholm  
-**Authors**: Akkireddy Challa (Telia) & Co-Engineer (Strawberry)  
+**Authors**: Akkireddy Challa (Telia) & Nishant Mattupalli (Strawberry)  
 **Target Runtime**: WebGL 2.0 / WebGPU (Desktop & Mobile Browser Parity via Bitmagic GDK)  
 **Engine Stack**: Bitmagic Engine · Three.js · Rapier 3D Physics · Web Audio API · Anthropic Claude Code  
 
