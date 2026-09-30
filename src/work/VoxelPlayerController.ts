@@ -14,6 +14,8 @@ import type { GameConstants } from 'engine/Constants.js';
 import type RAPIER from '@dimforge/rapier3d-compat';
 import type { PhysicsWorld } from 'engine/physics/PhysicsWorld.js';
 
+import { DEFAULT_PHYSICS, type PhysicsConstants } from './PhysicsConfig.js';
+
 export class VoxelPlayerController extends PlayerController {
     private terrainRegistry: TerrainTypeRegistry;
     private damageAccumulator: number = 0;
@@ -24,21 +26,7 @@ export class VoxelPlayerController extends PlayerController {
         physicsWorld: PhysicsWorld,
         cameraController: CameraController,
         engine: EngineLike | null = null,
-        physicsConfig: {
-            gravity: number;
-            terminalVelocity: number;
-            jumpHeight: number;
-            airControlMultiplier: number;
-            groundFriction: number;
-            airFriction: number;
-        } = {
-            gravity: -48.0,
-            terminalVelocity: 53.0,
-            jumpHeight: 2.5,
-            airControlMultiplier: 0.5,
-            groundFriction: 0.9,
-            airFriction: 0.98
-        },
+        physicsConfig: PhysicsConstants = DEFAULT_PHYSICS,
         worldGenerator: WorldGenerator | null = null,
         movementSystem?: any,
         constants?: Partial<GameConstants>

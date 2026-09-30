@@ -601,6 +601,11 @@ export class VoxelGame implements GenreGameInterface {
             this.cameraController.dispose();
         }
 
+        if (this.bounceManager) {
+            this.bounceManager.dispose();
+            this.bounceManager = null;
+        }
+
         if (this.player && this.engine.scene) {
             this.engine.scene.remove(this.player);
         }

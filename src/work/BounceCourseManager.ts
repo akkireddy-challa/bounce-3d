@@ -22,10 +22,15 @@ export class BounceCourseManager {
         cooldown: number;
         launch: THREE.Vector3;
         isVertical: boolean;
+        hasAwardedScore: boolean;
     }[] = [];
     private spikes: { mesh: THREE.Group; position: THREE.Vector3 }[] = [];
     private exitPortal: { group: THREE.Group; unlocked: boolean; light: THREE.PointLight } | null = null;
     private floatingIslands: THREE.Group[] = [];
+    private physicsBodies: any[] = [];
+    private courseLights: THREE.Light[] = [];
+    private sceneryObjects: THREE.Object3D[] = [];
+    private animatingRings: { mesh: THREE.Mesh; light?: THREE.PointLight; elapsed: number }[] = [];
 
     // Rolling Red Ball Visual
     private ballVisual: THREE.Group | null = null;
@@ -39,10 +44,10 @@ export class BounceCourseManager {
     public gameTime: number = 0;
     public score: number = 0;
     public highScore: number = 0;
-    private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
-    private initialSpawn: THREE.Vector3 = new THREE.Vector3(0, 4.6, 0);
+    private spawnCheckpoint: THREE.Vector3 = new THREE.Vector3(0, 4.0, 0);
+    private initialSpawn: THREE.Vector3 = new THREE.Vector3(0, 4.0, 0);
     private checkpointIndex: number = 0;
-    private readonly ballRadius = 0.55;
+    private readonly ballRadius = 0.50;
     private readonly usesForgedLevel: boolean;
     private forgedCheckpoints: THREE.Vector3[] = [];
     private forgedFallY = -Infinity;
@@ -90,11 +95,11 @@ export class BounceCourseManager {
             this.spawnCheckpoint.copy(this.getPhysicsPosition());
             this.lastPlayerPos.copy(this.getBallPosition());
         } else if (player) {
-            this.spawnCheckpoint.set(0, 4.6, 0);
-            this.lastPlayerPos.set(0, 4.6, 0);
-            player.position.set(0, 4.6, 0);
+            this.spawnCheckpoint.set(0, 4.0, 0);
+            this.lastPlayerPos.set(0, 4.0, 0);
+            player.position.set(0, 4.0, 0);
             if (this.playerController?.playerBody) {
-                this.playerController.playerBody.setTranslation({ x: 0, y: 4.6, z: 0 }, true);
+                this.playerController.playerBody.setTranslation({ x: 0, y: 4.0, z: 0 }, true);
                 this.playerController.playerBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
@@ -404,13 +409,24 @@ export class BounceCourseManager {
         this.retryButton.title = 'Restart Run from Start (Key: R)';
         this.retryButton.onmouseenter = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.06)'; };
         this.retryButton.onmouseleave = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.0)'; };
-        this.retryButton.onclick = () => { this.restartRun(); };
+        // Controls hint badge
+        const controlsCard = document.createElement('div');
+        controlsCard.style.background = 'rgba(15, 23, 42, 0.9)';
+        controlsCard.style.backdropFilter = 'blur(8px)';
+        controlsCard.style.border = '2px solid #64748B';
+        controlsCard.style.borderRadius = '500px';
+        controlsCard.style.padding = '7px 16px';
+        controlsCard.style.color = '#E2E8F0';
+        controlsCard.style.fontSize = '14px';
+        controlsCard.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.35)';
+        controlsCard.innerText = '🎮 WASD / Arrows: Roll · Space: Bounce Jump · R: Retry';
 
         this.hudContainer.appendChild(this.ringsDisplay);
         this.hudContainer.appendChild(this.scoreDisplay);
         this.hudContainer.appendChild(this.timerDisplay);
         this.hudContainer.appendChild(this.highScoreDisplay);
         this.hudContainer.appendChild(this.retryButton);
+        this.hudContainer.appendChild(controlsCard);
         document.body.appendChild(this.hudContainer);
     }
 
@@ -496,13 +512,16 @@ export class BounceCourseManager {
         const modal = document.getElementById('bounce-victory-modal');
         if (modal) modal.remove();
 
+        // Clear any in-flight ring animations
+        this.animatingRings = [];
+
         // Teleport player back to Spawn Island
         if (this.playerController?.playerBody) {
             const body = this.playerController.playerBody;
             if (typeof body.setTranslation === 'function') {
                 body.setTranslation({
                     x: this.spawnCheckpoint.x,
-                    y: this.usesForgedLevel ? this.spawnCheckpoint.y : 5.6,
+                    y: this.spawnCheckpoint.y,
                     z: this.spawnCheckpoint.z
                 }, true);
             }
@@ -511,13 +530,22 @@ export class BounceCourseManager {
             }
         }
         if (!this.usesForgedLevel) {
-            this.player.position.set(0, 4.55, 0);
+            this.player.position.copy(this.spawnCheckpoint);
         }
         if (this.ballVisual) {
             this.ballVisual.position.copy(this.getBallPosition());
         }
         this.ballScale.set(1, 1, 1);
         this.targetBallScale.set(1, 1, 1);
+        this.wasGrounded = true;
+        this.squishWobbleTimer = 0;
+        this.activeSparkles.forEach(s => { s.mesh.visible = false; });
+        this.activeSparkles = [];
+        this.trampolines.forEach(t => {
+            t.cooldown = 0;
+            t.hasAwardedScore = false;
+            t.springMesh.scale.set(1.0, 1.0, 1.0);
+        });
 
         this.updateRingsDisplay();
         this.updateTimerDisplay();
@@ -533,7 +561,7 @@ export class BounceCourseManager {
         this.ballVisual = new THREE.Group();
         this.ballVisual.name = 'Bounce3D_BallVisualGroup';
 
-        const radius = 0.55;
+        const radius = this.ballRadius;
         // Faceted low-poly diamond ruby sphere with fine geodesic facets matching reference artwork
         const sphereGeo = new THREE.IcosahedronGeometry(radius, 3);
         const sphereMat = new THREE.MeshStandardMaterial({
@@ -626,14 +654,15 @@ export class BounceCourseManager {
     private buildWorldScenery(): void {
         const RAPIER = getRapier();
 
-        // 0. Atmospheric Lighting matching the vibrant wallpaper
         const sunLight = new THREE.DirectionalLight(0xFFFBEB, 1.4);
         sunLight.position.set(25, 45, 20);
         sunLight.castShadow = true;
         this.scene.add(sunLight);
+        this.courseLights.push(sunLight);
 
         const skyAmbient = new THREE.AmbientLight(0xBAE6FD, 0.75);
         this.scene.add(skyAmbient);
+        this.courseLights.push(skyAmbient);
 
         // 1. Elevated Floating Islands in a Wide Platformer Vista
         const islandConfigs = [
@@ -722,6 +751,7 @@ export class BounceCourseManager {
                         .setFriction(0.9)
                         .setCollisionGroups(makeCollisionGroups(CollisionGroup.ENVIRONMENT, CollisionMask.ENVIRONMENT));
                     this.engine.physicsWorld.createCollider(colDesc, body);
+                    this.physicsBodies.push(body);
                 } catch (e) {
                     console.warn('Physics collider creation warning:', e);
                 }
@@ -1118,9 +1148,9 @@ export class BounceCourseManager {
         // 1. Five Golden Hoops spatially separated across the course without 2D overlap
         const hoopPositions = [
             new THREE.Vector3(0, 5.0, -4.5),       // Hoop 1: foreground center on spawn island
-            new THREE.Vector3(5.5, 5.8, -10.5),    // Hoop 2: mid-air arc jumping onto Azure Terrace (right)
+            new THREE.Vector3(7.2, 9.8, -11.5),    // Hoop 2: parabolic apex of Trampoline 2 launch to Azure Terrace
             new THREE.Vector3(10.5, 6.6, -17.0),   // Hoop 3: soaring over Azure Terrace (far right)
-            new THREE.Vector3(-10.5, 8.0, -29.0),  // Hoop 4: high arc over Amethyst Pinnacle (far left)
+            new THREE.Vector3(-1.5, 12.0, -24.8),  // Hoop 4: soaring arc of Trampoline 3 to Amethyst Pinnacle
             new THREE.Vector3(0, 10.4, -38.5),     // Hoop 5: gateway before Citadel Exit Portal (high center)
         ];
 
@@ -1141,7 +1171,7 @@ export class BounceCourseManager {
             ringMesh.name = `GoldenHoop_${idx}`;
 
             // Add shimmering point light
-            const ringLight = new THREE.PointLight(0xFBBF24, 2.5, 8);
+            const ringLight = new THREE.PointLight(0xFBBF24, 2.0, 7);
             ringLight.position.copy(pos);
 
             this.scene.add(ringMesh);
@@ -1241,11 +1271,6 @@ export class BounceCourseManager {
                 trampGroup.add(arm2);
             });
 
-            // Upward bouncing light aura
-            const trampLight = new THREE.PointLight(0xFACC15, 2.5, 6);
-            trampLight.position.y = 1.2;
-            trampGroup.add(trampLight);
-
             this.scene.add(trampGroup);
             this.trampolines.push({
                 mesh: trampGroup,
@@ -1253,15 +1278,16 @@ export class BounceCourseManager {
                 springMesh: springGroup,
                 cooldown: 0,
                 launch: cfg.launch,
-                isVertical: cfg.isVertical
+                isVertical: cfg.isVertical,
+                hasAwardedScore: false
             });
         });
 
         // 3. Red Geometric Crystal Spikes (Faceted Ruby Octahedrons with Bedrock Socket)
         const spikePositions = [
-            new THREE.Vector3(2.4, 4.0, -1.8),   // Spikes 1: foreground right on Spawn Island
-            new THREE.Vector3(10.5, 4.8, -14.5), // Spikes 2: Azure Terrace perimeter hazard
-            new THREE.Vector3(-10.5, 6.3, -26.5),// Spikes 3: Amethyst Pinnacle perimeter hazard
+            new THREE.Vector3(2.4, 4.0, -1.8),   // Spikes 1: foreground right on Spawn Island (surface = 4.0)
+            new THREE.Vector3(10.5, 5.1, -14.5), // Spikes 2: Azure Terrace perimeter hazard (surface = 5.1)
+            new THREE.Vector3(-10.5, 6.7, -26.5),// Spikes 3: Amethyst Pinnacle perimeter hazard (surface = 6.7)
         ];
 
         spikePositions.forEach((pos) => {
@@ -1310,11 +1336,6 @@ export class BounceCourseManager {
                 shard.castShadow = true;
                 spikeGroup.add(shard);
             });
-
-            // Crystal danger radiance
-            const crystalLight = new THREE.PointLight(0xEF4444, 2.5, 5);
-            crystalLight.position.y = 0.8;
-            spikeGroup.add(crystalLight);
 
             this.scene.add(spikeGroup);
             this.spikes.push({ mesh: spikeGroup, position: pos });
@@ -1545,7 +1566,7 @@ export class BounceCourseManager {
         // Dynamic Drop Shadow Projection right on top of the grass surface
         if (this.shadowMesh) {
             this.shadowMesh.position.set(playerPos.x, groundY + 0.02, playerPos.z);
-            const ballBottom = playerPos.y - 0.55;
+            const ballBottom = playerPos.y - this.ballRadius;
             const heightAboveGround = Math.max(0, ballBottom - groundY);
             const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.08);
             this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
@@ -1555,7 +1576,7 @@ export class BounceCourseManager {
         // 0. Update Red Ball Visual: Sync position, rolling rotation, squish/stretch, and idle breathing
         if (this.ballVisual) {
             // Anchor ball bottom firmly to the ground surface even during squash & stretch
-            const squashGroundAnchor = 0.55 * (1.0 - this.ballScale.y);
+            const squashGroundAnchor = this.ballRadius * (1.0 - this.ballScale.y);
             this.ballVisual.position.copy(playerPos);
             this.ballVisual.position.y -= squashGroundAnchor;
 
@@ -1576,7 +1597,7 @@ export class BounceCourseManager {
                     const vy = linvel.y;
                     const horizSpeed = Math.hypot(linvel.x, linvel.z);
                     const heightAboveGround = Math.max(0, playerPos.y - groundY);
-                    const isGroundedNow = heightAboveGround < 0.65;
+                    const isGroundedNow = Boolean(this.playerController?.isGrounded) || (heightAboveGround < 0.60);
 
                     // Landing impact detection: trigger rubber thud, elastic rebound bounce, and squash wobble
                     if (!this.wasGrounded && isGroundedNow && vy <= -1.8) {
@@ -1584,15 +1605,25 @@ export class BounceCourseManager {
                         this.squishWobbleTimer = 0.35;
                         this.playBounceThud(impactSpeed);
 
-                        // Elastic Rubber Ball Restitution: natural rebound bounce when dropping from height
-                        if (impactSpeed > 3.6) {
-                            const reboundY = Math.min(13.0, impactSpeed * 0.55);
+                        // Elastic Rubber Ball Restitution: natural rebound bounce when holding jump or high drop
+                        const isJumpHeld = Boolean(this.playerController?.keys?.ascend);
+                        if ((isJumpHeld && impactSpeed > 3.6) || impactSpeed > 13.0) {
+                            const reboundY = Math.min(12.0, impactSpeed * 0.55);
                             const curVel = body.linvel();
                             body.setLinvel({ x: curVel.x * 0.96, y: reboundY, z: curVel.z * 0.96 }, true);
-                            this.ballScale.set(1.3, 0.68, 1.3);
+                            this.ballScale.set(1.35, 0.60, 1.35);
+                        } else {
+                            // Controlled precision landing: solid rubber compression without unwanted bouncing chain
+                            this.ballScale.set(1.25, 0.72, 1.25);
                         }
                     }
                     this.wasGrounded = isGroundedNow;
+
+                    // Clamped, framerate-independent exponential smoothing (prevents lerp overshoot on hitch)
+                    const smoothDt = Math.min(deltaTime, 0.1);
+                    const lerpAir = 1.0 - Math.exp(-12.0 * smoothDt);
+                    const lerpIdle = 1.0 - Math.exp(-8.0 * smoothDt);
+                    const lerpRoll = 1.0 - Math.exp(-14.0 * smoothDt);
 
                     // Squash & stretch physics behavior
                     if (this.squishWobbleTimer > 0) {
@@ -1605,20 +1636,20 @@ export class BounceCourseManager {
                     } else if (vy > 3.5) {
                         // Rising fast in the air
                         this.targetBallScale.set(0.85, 1.25, 0.85);
-                        this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
+                        this.ballScale.lerp(this.targetBallScale, lerpAir);
                     } else if (vy < -4.5) {
                         // Falling fast
                         this.targetBallScale.set(0.9, 1.18, 0.9);
-                        this.ballScale.lerp(this.targetBallScale, deltaTime * 12.0);
+                        this.ballScale.lerp(this.targetBallScale, lerpAir);
                     } else if (horizSpeed < 0.25) {
                         // Idle breathing hover bob (alive character feel)
                         const breath = Math.sin(this.gameTime * 4.0);
                         this.targetBallScale.set(1.0 + breath * 0.03, 1.0 - breath * 0.04, 1.0 + breath * 0.03);
-                        this.ballScale.lerp(this.targetBallScale, deltaTime * 8.0);
+                        this.ballScale.lerp(this.targetBallScale, lerpIdle);
                     } else {
                         // Normal ground rolling
                         this.targetBallScale.set(1.0, 1.0, 1.0);
-                        this.ballScale.lerp(this.targetBallScale, deltaTime * 14.0);
+                        this.ballScale.lerp(this.targetBallScale, lerpRoll);
                     }
 
                     // Speed sparkle particle trail
@@ -1636,28 +1667,16 @@ export class BounceCourseManager {
             if (!ring.collected) {
                 ring.mesh.rotation.y += deltaTime * 2.2;
 
-                // Check distance
-                if (playerPos.distanceTo(ring.mesh.position) < 1.6) {
+                // Check distance (1.7m radius)
+                if (playerPos.distanceTo(ring.mesh.position) < 1.7) {
                     ring.collected = true;
                     this.ringsCollected++;
                     this.playChime();
                     this.addScore(500, '+500 GOLDEN HOOP!');
                     this.updateRingsDisplay();
 
-                    // Animate ring collect: flash and shrink
-                    ring.light.intensity = 5.0;
-                    const startTime = performance.now();
-                    const animInterval = setInterval(() => {
-                        const elapsed = (performance.now() - startTime) / 1000;
-                        if (elapsed >= 0.3) {
-                            ring.mesh.visible = false;
-                            ring.light.intensity = 0;
-                            clearInterval(animInterval);
-                        } else {
-                            const scale = 1.0 - elapsed / 0.3;
-                            ring.mesh.scale.set(scale, scale, scale);
-                        }
-                    }, 16);
+                    if (ring.light) ring.light.intensity = 4.0;
+                    this.animatingRings.push({ mesh: ring.mesh, light: ring.light, elapsed: 0 });
 
                     // Check if all hoops collected to unlock portal
                     if (this.ringsCollected >= this.totalRings) {
@@ -1667,7 +1686,23 @@ export class BounceCourseManager {
             }
         });
 
-        // 2. Yellow Trampolines: super bounce with robust cylindrical detection
+        // Advance ring collect flash/shrink animations cleanly without setInterval
+        for (let i = this.animatingRings.length - 1; i >= 0; i--) {
+            const anim = this.animatingRings[i];
+            if (!anim) continue;
+            anim.elapsed += deltaTime;
+            if (anim.elapsed >= 0.3) {
+                anim.mesh.visible = false;
+                if (anim.light) anim.light.intensity = 0;
+                this.animatingRings.splice(i, 1);
+            } else {
+                const scale = Math.max(0, 1.0 - anim.elapsed / 0.3);
+                anim.mesh.scale.set(scale, scale, scale);
+                if (anim.light) anim.light.intensity = 4.0 * (1.0 - anim.elapsed / 0.3);
+            }
+        }
+
+        // 2. Yellow Trampolines: downward contact, anti-farming, and trajectory impulse
         this.trampolines.forEach(tramp => {
             if (tramp.cooldown > 0) {
                 tramp.cooldown -= deltaTime;
@@ -1675,12 +1710,21 @@ export class BounceCourseManager {
 
             const horizDist = Math.hypot(playerPos.x - tramp.basePosition.x, playerPos.z - tramp.basePosition.z);
             const vertOffset = playerPos.y - tramp.basePosition.y;
-            // Pad radius is 1.48m; triggers reliably when ball lands or rolls over pad
-            if (horizDist < 1.75 && vertOffset >= -0.2 && vertOffset <= 2.4 && tramp.cooldown <= 0) {
+
+            const body = this.playerController?.playerBody;
+            const curVel = body?.linvel ? body.linvel() : { x: 0, y: 0, z: 0 };
+
+            // Pad radius is 1.26m; requires downward landing/contact directly on pad surface
+            if (horizDist <= 1.35 && vertOffset >= 0.4 && vertOffset <= 1.5 && curVel.y <= 1.5 && tramp.cooldown <= 0) {
                 tramp.cooldown = 0.35;
                 this.playBoing();
                 this.ballScale.set(1.45, 0.52, 1.45); // Juicy impact squash
-                this.addScore(150, '+150 MEGA BOUNCE!');
+
+                // Anti-farming: award large score on initial launch, preventing infinite score looping
+                if (!tramp.hasAwardedScore) {
+                    tramp.hasAwardedScore = true;
+                    this.addScore(250, '+250 MEGA BOUNCE!');
+                }
 
                 // Compress spring visually
                 tramp.springMesh.scale.set(1.3, 0.3, 1.3);
@@ -1689,15 +1733,11 @@ export class BounceCourseManager {
                 }, 160);
 
                 // Apply trajectory launch impulse
-                if (this.playerController?.playerBody) {
-                    const body = this.playerController.playerBody;
-                    if (typeof body.setLinvel === 'function') {
-                        if (tramp.isVertical) {
-                            const curVel = body.linvel();
-                            body.setLinvel({ x: curVel.x * 0.8, y: 22.5, z: curVel.z * 0.8 }, true);
-                        } else {
-                            body.setLinvel({ x: tramp.launch.x, y: tramp.launch.y, z: tramp.launch.z }, true);
-                        }
+                if (body && typeof body.setLinvel === 'function') {
+                    if (tramp.isVertical) {
+                        body.setLinvel({ x: curVel.x * 0.8, y: tramp.launch.y, z: curVel.z * 0.8 }, true);
+                    } else {
+                        body.setLinvel({ x: tramp.launch.x, y: tramp.launch.y, z: tramp.launch.z }, true);
                     }
                 }
             }
@@ -1745,10 +1785,12 @@ export class BounceCourseManager {
             }
         }
 
-        // 3. Red Hazard Spikes: damage & pop
+        // 3. Red Hazard Spikes: damage & pop (cylindrical trigger volume)
         this.spikes.forEach(spike => {
-            const dist = playerPos.distanceTo(spike.position);
-            if (dist < 1.3 && Math.abs(playerPos.y - spike.position.y) < 1.0) {
+            const horizDist = Math.hypot(playerPos.x - spike.position.x, playerPos.z - spike.position.z);
+            const vertGap = playerPos.y - spike.position.y;
+            // Pad socket + crystal shards: 1.25m horizontal radius, -0.2 to 1.8m vertical height
+            if (horizDist < 1.25 && vertGap >= -0.2 && vertGap <= 1.8) {
                 this.handlePlayerPop();
             }
         });
@@ -1790,14 +1832,17 @@ export class BounceCourseManager {
 
     private handlePlayerPop(): void {
         this.playPop();
-        this.showToast('💥 POPPED! RESPAWNING...', '#EF4444');
+        // Popping penalty to introduce real stakes (score floors at 0)
+        this.score = Math.max(0, this.score - 250);
+        this.updateScoreDisplay();
+        this.showToast('💥 POPPED! -250 PTS · RESPAWNING...', '#EF4444');
 
         if (this.playerController?.playerBody) {
             const body = this.playerController.playerBody;
             if (typeof body.setTranslation === 'function') {
                 body.setTranslation({
                     x: this.spawnCheckpoint.x,
-                    y: this.usesForgedLevel ? this.spawnCheckpoint.y : this.spawnCheckpoint.y + 1.0,
+                    y: this.spawnCheckpoint.y,
                     z: this.spawnCheckpoint.z
                 }, true);
             }
@@ -1813,6 +1858,9 @@ export class BounceCourseManager {
         }
         this.ballScale.set(1, 1, 1);
         this.targetBallScale.set(1, 1, 1);
+        this.wasGrounded = true;
+        this.squishWobbleTimer = 0;
+        this.trampolines.forEach(t => { t.cooldown = 0; });
     }
 
     private triggerVictory(): void {
@@ -1912,5 +1960,99 @@ export class BounceCourseManager {
         setTimeout(() => {
             toast.remove();
         }, 2500);
+    }
+
+    public dispose(): void {
+        console.log('🧹 Disposing BounceCourseManager and cleaning up resources...');
+
+        // 1. Clean up DOM elements and injected styles
+        if (this.hudContainer) {
+            this.hudContainer.remove();
+            this.hudContainer = null;
+        }
+        const styleEl = document.getElementById('bounce3d-hide-debug-controls');
+        if (styleEl) styleEl.remove();
+        const victoryModal = document.getElementById('bounce-victory-modal');
+        if (victoryModal) victoryModal.remove();
+
+        // 2. Clear all animation state
+        this.animatingRings = [];
+
+        // 3. Remove scene meshes and course objects
+        if (this.ballVisual) {
+            this.scene.remove(this.ballVisual);
+            this.ballVisual = null;
+        }
+        if (this.shadowMesh) {
+            this.scene.remove(this.shadowMesh);
+            this.shadowMesh = null;
+        }
+        for (const ring of this.rings) {
+            this.scene.remove(ring.mesh);
+            if (ring.light) this.scene.remove(ring.light);
+        }
+        this.rings = [];
+
+        for (const tramp of this.trampolines) {
+            this.scene.remove(tramp.mesh);
+        }
+        this.trampolines = [];
+
+        for (const spike of this.spikes) {
+            this.scene.remove(spike.mesh);
+        }
+        this.spikes = [];
+
+        if (this.exitPortal) {
+            this.scene.remove(this.exitPortal.group);
+            this.exitPortal = null;
+        }
+
+        for (const island of this.floatingIslands) {
+            this.scene.remove(island);
+        }
+        this.floatingIslands = [];
+
+        for (const sc of this.sceneryObjects) {
+            this.scene.remove(sc);
+        }
+        this.sceneryObjects = [];
+
+        for (const l of this.courseLights) {
+            this.scene.remove(l);
+        }
+        this.courseLights = [];
+
+        for (const sp of this.sparklePool) {
+            this.scene.remove(sp);
+        }
+        this.sparklePool = [];
+        this.activeSparkles = [];
+
+        // 4. Remove physics bodies from Rapier world
+        if (this.engine?.physicsWorld) {
+            for (const body of this.physicsBodies) {
+                try {
+                    this.engine.physicsWorld.removeRigidBody(body);
+                } catch (e) {}
+            }
+            this.physicsBodies = [];
+        }
+
+        // 5. Release audio resources
+        if (this.audioCtx) {
+            try {
+                this.audioCtx.close();
+            } catch (e) {}
+            this.audioCtx = null;
+        }
+        if (this.proBoingAudio) {
+            this.proBoingAudio.pause();
+            this.proBoingAudio = null;
+        }
+        if (this.proBounceAudio) {
+            this.proBounceAudio.pause();
+            this.proBounceAudio = null;
+        }
     }
 }

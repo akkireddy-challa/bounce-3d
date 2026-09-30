@@ -53,7 +53,7 @@ export interface PhysicsConstants {
 export const DEFAULT_PHYSICS: PhysicsConstants = {
     gravity: -34.0,            // Buoyant bouncy arcade gravity
     terminalVelocity: 55.0,
-    jumpHeight: 3.8,           // Higher, springy bounce leap
+    jumpHeight: 3.2,           // Accurate 3.2m jump apex
     airControlMultiplier: 0.95, // Responsive in-air steering control
     groundFriction: 0.96,      // Smooth rolling momentum
     airFriction: 0.99
@@ -61,10 +61,10 @@ export const DEFAULT_PHYSICS: PhysicsConstants = {
 
 /**
  * Calculate jump velocity based on desired jump height and gravity
- * Uses Unity's formula: sqrt(jumpHeight * -1.5 * gravity)
+ * Exact kinematic formula: v = sqrt(2 * h * |g|)
  */
 export function calculateJumpVelocity(jumpHeight: number, gravity: number): number {
-    return Math.sqrt(jumpHeight * -1.5 * gravity);
+    return Math.sqrt(jumpHeight * 2.0 * Math.abs(gravity));
 }
 
 /**
