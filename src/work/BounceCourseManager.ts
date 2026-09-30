@@ -79,7 +79,7 @@ export class BounceCourseManager {
         this.player = player;
         this.playerController = playerController;
         this.engine = engine;
-        this.usesForgedLevel = Boolean(engine?.getGameData?.()?.worldProfileData?.meshLevel);
+        this.usesForgedLevel = false; // Authored floating islands course matching wallpaper reference artwork
 
         // Initialize Bitmagic Pro Studio Audio SFX
         try {
@@ -1608,9 +1608,13 @@ export class BounceCourseManager {
                         // Elastic Rubber Ball Restitution: natural rebound bounce when holding jump or high drop
                         const isJumpHeld = Boolean(this.playerController?.keys?.ascend);
                         if ((isJumpHeld && impactSpeed > 3.6) || impactSpeed > 13.0) {
-                            const reboundY = Math.min(12.0, impactSpeed * 0.55);
-                            const curVel = body.linvel();
-                            body.setLinvel({ x: curVel.x * 0.96, y: reboundY, z: curVel.z * 0.96 }, true);
+                            const reboundY = Math.min(13.0, impactSpeed * 0.55);
+                            const ms = this.playerController?.getMovementSystem?.() as any;
+                            if (ms && typeof ms.applyImpulse === 'function') {
+                                ms.applyImpulse({ x: 0, y: reboundY, z: 0 });
+                            } else if (this.playerController && typeof this.playerController.applyKnockback === 'function') {
+                                this.playerController.applyKnockback(0, 0, reboundY);
+                            }
                             this.ballScale.set(1.35, 0.60, 1.35);
                         } else {
                             // Controlled precision landing: solid rubber compression without unwanted bouncing chain
@@ -1732,13 +1736,22 @@ export class BounceCourseManager {
                     tramp.springMesh.scale.set(1.0, 1.0, 1.0);
                 }, 160);
 
-                // Apply trajectory launch impulse
-                if (body && typeof body.setLinvel === 'function') {
-                    if (tramp.isVertical) {
-                        body.setLinvel({ x: curVel.x * 0.8, y: tramp.launch.y, z: curVel.z * 0.8 }, true);
-                    } else {
-                        body.setLinvel({ x: tramp.launch.x, y: tramp.launch.y, z: tramp.launch.z }, true);
-                    }
+                // Apply trajectory launch impulse via kinematic motor knockback
+                const ms = this.playerController?.getMovementSystem?.() as any;
+                const curHorizX = ms?.horizVelX ?? 0;
+                const curHorizZ = ms?.horizVelZ ?? 0;
+                const targetVx = tramp.isVertical ? curHorizX * 0.5 : tramp.launch.x;
+                const targetVz = tramp.isVertical ? curHorizZ * 0.5 : tramp.launch.z;
+                const targetVy = tramp.launch.y;
+
+                if (ms && typeof ms.applyImpulse === 'function') {
+                    ms.applyImpulse({
+                        x: targetVx - curHorizX,
+                        y: targetVy,
+                        z: targetVz - curHorizZ
+                    });
+                } else if (this.playerController && typeof this.playerController.applyKnockback === 'function') {
+                    this.playerController.applyKnockback(targetVx - curHorizX, targetVz - curHorizZ, targetVy);
                 }
             }
         });
