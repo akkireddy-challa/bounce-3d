@@ -16,13 +16,10 @@ export const bitmagicCharacterFactory: IBlockCharacterFactory = {
 
   getCharacterDimensions: () => {
     const bitmagicHeight = BITMAGIC_CONFIG.targetHeight;
-    const skeletonHeight = getSkeletonHeight();
-    const heightRatio = bitmagicHeight / skeletonHeight;
-
     return {
-      width: 1.0 * heightRatio,
+      width: bitmagicHeight,
       height: bitmagicHeight,
-      depth: 1.0 * heightRatio
+      depth: bitmagicHeight
     };
   }
 };
@@ -43,10 +40,11 @@ export function applyBitmagicModifications(
   const currentCharacterHeight = playerController?.characterHeight || getSkeletonHeight();
   scaleCharacterToHeight(player, currentCharacterHeight, bitmagicHeight, '🔴');
 
-  // 2. Update physics to a rolling sphere
+  // 2. Update physics to a true 0.5m radius rolling sphere
   const radius = bitmagicHeight * 0.5;
   if (playerController) {
     playerController.setCharacterHeight(bitmagicHeight);
+    playerController.capsuleRadius = radius;
     if (typeof playerController.setCapsuleDimensions === 'function') {
       playerController.setCapsuleDimensions(bitmagicHeight, radius);
     }
@@ -58,6 +56,7 @@ export function applyBitmagicModifications(
       playerLoader.recreatePhysicsBody(player);
       if (playerController) {
         playerController.playerBody = playerLoader.getPlayerBody();
+        playerController.capsuleRadius = radius;
       }
     }
   }
@@ -66,7 +65,7 @@ export function applyBitmagicModifications(
     playerController.regroundCharacter(bitmagicHeight);
   }
 
-  console.log(`🔴 Bounce 3D Ball ready: radius=${radius}m, height=${bitmagicHeight}m`);
+  console.log(`🔴 Bounce 3D Ball ready: true spherical collider radius=${radius}m, height=${bitmagicHeight}m`);
 }
 
 /**

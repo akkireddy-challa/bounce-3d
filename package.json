@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "build:game": "bitmagic build",
     "check": "tsc --noEmit",
     "dev": "vite"
   },

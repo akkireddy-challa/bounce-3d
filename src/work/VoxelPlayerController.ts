@@ -43,6 +43,110 @@ export class VoxelPlayerController extends PlayerController {
         if (this.mobileControls.isEnabled() && cameraLike.disableBuiltInTouchControls !== undefined) {
             cameraLike.disableBuiltInTouchControls = true;
         }
+
+        // Clean up mobile controls for pure Bounce arcade experience
+        this.setupMobileControlsLayout();
+    }
+
+    /**
+     * Clean up touch screen layout: keep Joystick, Jump/Bounce, and Retry only.
+     */
+    public setupMobileControlsLayout(): void {
+        if (!this.mobileControls) return;
+
+        try {
+            // Hide non-essential buttons (crouch, interact, act, alt, exit)
+            const hideActions = ['descend', 'action', 'secondaryAction', 'interact', 'exit'];
+            hideActions.forEach(action => {
+                const btn = this.mobileControls.getButton(action);
+                if (btn) {
+                    btn.style.display = 'none';
+                    btn.style.pointerEvents = 'none';
+                }
+            });
+
+            // Customize Jump button
+            const jumpBtn = this.mobileControls.getButton('ascend');
+            if (jumpBtn) {
+                jumpBtn.style.display = 'flex';
+            }
+
+            // Register clean RETRY button in top-right
+            this.mobileControls.registerAction({
+                action: 'retry',
+                label: 'RETRY',
+                behavior: 'tap'
+            }, {
+                top: '18px',
+                right: '18px',
+                bottom: 'auto',
+                width: 'auto',
+                height: 'auto',
+                borderRadius: '12px',
+                fontSize: '14px'
+            });
+        } catch (e) {
+            console.warn('Failed to customize mobile controls:', e);
+        }
+    }
+
+    /**
+     * Guarded mobile haptic vibration
+     */
+    public triggerHaptic(pattern: number | number[]): void {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            try {
+                navigator.vibrate(pattern);
+            } catch (_) {}
+        }
+    }
+
+    /**
+     * Strongly-typed public velocity API for Bounce course manager
+     */
+    public getHorizontalVelocity(): { x: number; z: number } {
+        const ms = this.getMovementSystem() as any;
+        if (ms && typeof ms.horizVelX === 'number' && typeof ms.horizVelZ === 'number') {
+            return { x: ms.horizVelX, z: ms.horizVelZ };
+        }
+        if (this.playerBody) {
+            const vel = this.playerBody.linvel();
+            return { x: vel.x, z: vel.z };
+        }
+        return { x: 0, z: 0 };
+    }
+
+    public launch(velocity: { x: number; y: number; z: number }): void {
+        const cur = this.getHorizontalVelocity();
+        const deltaX = velocity.x - cur.x;
+        const deltaZ = velocity.z - cur.z;
+        this.applyKnockback(deltaX, deltaZ, velocity.y);
+    }
+
+    public applyHorizontalDamping(maxSpeed: number): void {
+        const ms = this.getMovementSystem() as any;
+        if (ms && typeof ms.horizVelX === 'number' && typeof ms.horizVelZ === 'number') {
+            const speed = Math.hypot(ms.horizVelX, ms.horizVelZ);
+            if (speed > maxSpeed && speed > 0.001) {
+                const factor = maxSpeed / speed;
+                ms.horizVelX *= factor;
+                ms.horizVelZ *= factor;
+            }
+        }
+    }
+
+    public resetMotion(): void {
+        const ms = this.getMovementSystem() as any;
+        if (ms && typeof ms.reset === 'function') {
+            ms.reset();
+        } else if (ms) {
+            ms.horizVelX = 0;
+            ms.horizVelZ = 0;
+            ms.verticalVelocity = 0;
+        }
+        if (this.playerBody) {
+            this.playerBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        }
     }
 
     override update(deltaTime: number): void {

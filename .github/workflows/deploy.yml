@@ -24,10 +24,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Type Check
+        run: npm run check
+
+      - name: Build Standalone Production Game
+        run: npx bitmagic build
+
       - name: Prepare Pages Artifact
         run: |
-          mkdir -p public
-          cp QR-SHOWCASE.html public/index.html
+          mkdir -p public/play
+          # Deploy full standalone game at root / and /play/
+          cp .bitmagic/build/index.html public/index.html
+          cp .bitmagic/build/index.html public/play/index.html
+          # Deploy showcase page at /showcase.html
+          cp QR-SHOWCASE.html public/showcase.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

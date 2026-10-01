@@ -80,7 +80,7 @@ export class BounceCourseManager {
         this.player = player;
         this.playerController = playerController;
         this.engine = engine;
-        this.usesForgedLevel = false; // Authored floating islands course matching wallpaper reference artwork
+        this.usesForgedLevel = Boolean(this.engine?.getGameData?.()?.worldProfileData?.meshLevel);
 
         // Initialize Bitmagic Pro Studio Audio SFX
         try {
@@ -355,7 +355,7 @@ export class BounceCourseManager {
         this.ringsDisplay.style.color = '#FBBF24';
         this.ringsDisplay.style.fontSize = '16px';
         this.ringsDisplay.style.boxShadow = '0 4px 14px rgba(251, 191, 36, 0.35)';
-        this.ringsDisplay.innerText = '🟡 Rings: 0 / 5';
+        this.ringsDisplay.innerText = `🟡 Rings: 0 / ${this.totalRings}`;
 
         // Score card
         this.scoreDisplay = document.createElement('div');
@@ -408,9 +408,12 @@ export class BounceCourseManager {
         this.retryButton.style.transition = 'transform 0.15s ease, background 0.15s ease';
         this.retryButton.innerText = '🔄 Retry (R)';
         this.retryButton.title = 'Restart Run from Start (Key: R)';
+        this.retryButton.onclick = () => { this.restartRun(); };
         this.retryButton.onmouseenter = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.06)'; };
         this.retryButton.onmouseleave = () => { if (this.retryButton) this.retryButton.style.transform = 'scale(1.0)'; };
-        // Controls hint badge
+
+        // Controls hint badge (Responsive touch vs desktop)
+        const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0));
         const controlsCard = document.createElement('div');
         controlsCard.style.background = 'rgba(15, 23, 42, 0.9)';
         controlsCard.style.backdropFilter = 'blur(8px)';
@@ -420,7 +423,9 @@ export class BounceCourseManager {
         controlsCard.style.color = '#E2E8F0';
         controlsCard.style.fontSize = '14px';
         controlsCard.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.35)';
-        controlsCard.innerText = '🎮 WASD / Arrows: Roll · Space: Bounce Jump · R: Retry';
+        controlsCard.innerText = isTouch
+            ? '📱 Joystick: Roll · JUMP: Bounce'
+            : '🎮 WASD / Arrows: Roll · Space: Bounce Jump · R: Retry';
 
         this.hudContainer.appendChild(this.ringsDisplay);
         this.hudContainer.appendChild(this.scoreDisplay);
@@ -1317,98 +1322,7 @@ export class BounceCourseManager {
         ];
 
         trampolineConfigs.forEach((cfg) => {
-            const pos = cfg.pos;
-            const trampGroup = new THREE.Group();
-            trampGroup.position.copy(pos);
-
-            // Sturdy faceted dark steel base plate
-            const baseMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.85, roughness: 0.3, flatShading: true });
-            const basePlateGeo = new THREE.CylinderGeometry(1.2, 1.35, 0.15, 12);
-            const basePlate = new THREE.Mesh(basePlateGeo, baseMat);
-            basePlate.position.y = 0.08;
-            trampGroup.add(basePlate);
-
-            // Heavy coiled steel industrial compression spring column
-            const springGroup = new THREE.Group();
-            const coilMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.92, roughness: 0.18, flatShading: true });
-            [0.18, 0.32, 0.46, 0.60].forEach(cy => {
-                const coil = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.11, 8, 20), coilMat);
-                coil.rotation.x = Math.PI / 2;
-                coil.position.y = cy;
-                springGroup.add(coil);
-            });
-            trampGroup.add(springGroup);
-
-            // Faceted beveled sunflower-yellow rim collar (Reference Artwork)
-            const collarGeo = new THREE.CylinderGeometry(1.48, 1.32, 0.34, 14);
-            const collarMat = new THREE.MeshStandardMaterial({
-                color: 0xFACC15, // Bright sun yellow
-                roughness: 0.22,
-                metalness: 0.18,
-                flatShading: true,
-                emissive: 0x854D0E,
-                emissiveIntensity: 0.45
-            });
-            const collarMesh = new THREE.Mesh(collarGeo, collarMat);
-            collarMesh.position.y = 0.72;
-            collarMesh.castShadow = true;
-            trampGroup.add(collarMesh);
-
-            // Dark recessed rubber trampoline bounce pad
-            const padGeo = new THREE.CylinderGeometry(1.26, 1.26, 0.12, 20);
-            const padMat = new THREE.MeshStandardMaterial({
-                color: 0x0F172A, // Dark graphite rubber
-                roughness: 0.75,
-                metalness: 0.1,
-                flatShading: true
-            });
-            const padMesh = new THREE.Mesh(padGeo, padMat);
-            padMesh.position.y = 0.82;
-            padMesh.castShadow = true;
-            trampGroup.add(padMesh);
-
-            // Bold yellow bullseye ring
-            const bullseyeGeo = new THREE.RingGeometry(0.55, 0.88, 20);
-            const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide });
-            const bullseye = new THREE.Mesh(bullseyeGeo, bullseyeMat);
-            bullseye.rotation.x = -Math.PI / 2;
-            bullseye.position.y = 0.89;
-            trampGroup.add(bullseye);
-
-            // Red center target star
-            const starGeo = new THREE.CircleGeometry(0.32, 16);
-            const starMat = new THREE.MeshBasicMaterial({ color: 0xEF4444, side: THREE.DoubleSide });
-            const star = new THREE.Mesh(starGeo, starMat);
-            star.rotation.x = -Math.PI / 2;
-            star.position.y = 0.90;
-            trampGroup.add(star);
-
-            // Upward bounce chevrons (^ ^ ^) in bright white
-            const chevronMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
-            [-0.2, 0.0, 0.2].forEach((cz) => {
-                const arm1 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
-                arm1.rotation.x = -Math.PI / 2;
-                arm1.rotation.z = Math.PI / 4;
-                arm1.position.set(-0.07, 0.91, cz);
-                trampGroup.add(arm1);
-
-                const arm2 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
-                arm2.rotation.x = -Math.PI / 2;
-                arm2.rotation.z = -Math.PI / 4;
-                arm2.position.set(0.07, 0.91, cz);
-                trampGroup.add(arm2);
-            });
-
-            this.scene.add(trampGroup);
-            this.trampolines.push({
-                mesh: trampGroup,
-                basePosition: pos.clone(),
-                springMesh: springGroup,
-                cooldown: 0,
-                launch: cfg.launch,
-                isVertical: cfg.isVertical,
-                hasAwardedScore: false
-            });
+            this.spawnTrampoline(cfg.pos, cfg.launch, cfg.isVertical);
         });
 
         // 3. Red Geometric Crystal Spikes (Faceted Ruby Octahedrons with Bedrock Socket)
@@ -1419,54 +1333,7 @@ export class BounceCourseManager {
         ];
 
         spikePositions.forEach((pos) => {
-            const spikeGroup = new THREE.Group();
-            spikeGroup.position.copy(pos);
-
-            // Dark bedrock crystal socket embedded flush into platform
-            const socketGeo = new THREE.CylinderGeometry(1.2, 1.3, 0.16, 12);
-            const socketMat = new THREE.MeshStandardMaterial({
-                color: 0x1E293B, // Dark slate bedrock
-                roughness: 0.85,
-                metalness: 0.3,
-                flatShading: true
-            });
-            const socketMesh = new THREE.Mesh(socketGeo, socketMat);
-            socketMesh.position.y = 0.05;
-            socketMesh.receiveShadow = true;
-            spikeGroup.add(socketMesh);
-
-            // Jagged faceted red geometric crystal shards (Elongated Octahedrons with sharp diamond facets)
-            const crystalConfigs = [
-                { x: 0, z: 0, sx: 0.85, sy: 3.2, sz: 0.85, y: 0.9, rx: 0.05, rz: -0.05 },          // Center primary crystal spire
-                { x: -0.42, z: -0.32, sx: 0.65, sy: 2.5, sz: 0.65, y: 0.7, rx: -0.2, rz: 0.15 },  // Front-left crystal shard
-                { x: 0.42, z: -0.32, sx: 0.7, sy: 2.6, sz: 0.7, y: 0.75, rx: -0.15, rz: -0.2 },   // Front-right crystal shard
-                { x: -0.32, z: 0.42, sx: 0.6, sy: 2.0, sz: 0.6, y: 0.6, rx: 0.2, rz: 0.12 },     // Rear-left crystal shard
-                { x: 0.35, z: 0.38, sx: 0.62, sy: 2.2, sz: 0.62, y: 0.65, rx: 0.18, rz: -0.15 },  // Rear-right crystal shard
-            ];
-
-            const crystalMat = new THREE.MeshStandardMaterial({
-                color: 0xDC2626, // Crimson ruby crystal
-                roughness: 0.08,
-                metalness: 0.4,
-                emissive: 0x991B1B,
-                emissiveIntensity: 0.7,
-                flatShading: true // Faceted diamond crystal polygon look!
-            });
-
-            crystalConfigs.forEach(cc => {
-                // Octahedron: 8 sharp triangular facets meeting at diamond points!
-                const octGeo = new THREE.OctahedronGeometry(0.35, 0);
-                const shard = new THREE.Mesh(octGeo, crystalMat);
-                shard.scale.set(cc.sx, cc.sy, cc.sz);
-                shard.position.set(cc.x, cc.y, cc.z);
-                shard.rotation.x = cc.rx;
-                shard.rotation.z = cc.rz;
-                shard.castShadow = true;
-                spikeGroup.add(shard);
-            });
-
-            this.scene.add(spikeGroup);
-            this.spikes.push({ mesh: spikeGroup, position: pos });
+            this.spawnSpikeCluster(pos);
         });
 
         // 4. Ancient Faceted Stone Archway Portal with Twin Purple Brazier Pillars & Stone Steps (Reference Artwork)
@@ -1606,62 +1473,295 @@ export class BounceCourseManager {
         this.exitPortal = { group: portalGroup, unlocked: false, light: portalLight };
     }
 
+    private spawnTrampoline(pos: THREE.Vector3, launch: THREE.Vector3, isVertical: boolean): void {
+        const trampGroup = new THREE.Group();
+        trampGroup.position.copy(pos);
+
+        // Sturdy faceted dark steel base plate
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, metalness: 0.85, roughness: 0.3, flatShading: true });
+        const basePlateGeo = new THREE.CylinderGeometry(1.2, 1.35, 0.15, 12);
+        const basePlate = new THREE.Mesh(basePlateGeo, baseMat);
+        basePlate.position.y = 0.08;
+        trampGroup.add(basePlate);
+
+        // Heavy coiled steel industrial compression spring column
+        const springGroup = new THREE.Group();
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.92, roughness: 0.18, flatShading: true });
+        [0.18, 0.32, 0.46, 0.60].forEach(cy => {
+            const coil = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.11, 8, 20), coilMat);
+            coil.rotation.x = Math.PI / 2;
+            coil.position.y = cy;
+            springGroup.add(coil);
+        });
+        trampGroup.add(springGroup);
+
+        // Faceted beveled sunflower-yellow rim collar (Reference Artwork)
+        const collarGeo = new THREE.CylinderGeometry(1.48, 1.32, 0.34, 14);
+        const collarMat = new THREE.MeshStandardMaterial({
+            color: 0xFACC15, // Bright sun yellow
+            roughness: 0.22,
+            metalness: 0.18,
+            flatShading: true,
+            emissive: 0x854D0E,
+            emissiveIntensity: 0.45
+        });
+        const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+        collarMesh.position.y = 0.72;
+        collarMesh.castShadow = true;
+        trampGroup.add(collarMesh);
+
+        // Dark recessed rubber trampoline bounce pad
+        const padGeo = new THREE.CylinderGeometry(1.26, 1.26, 0.12, 20);
+        const padMat = new THREE.MeshStandardMaterial({
+            color: 0x0F172A, // Dark graphite rubber
+            roughness: 0.75,
+            metalness: 0.1,
+            flatShading: true
+        });
+        const padMesh = new THREE.Mesh(padGeo, padMat);
+        padMesh.position.y = 0.82;
+        padMesh.castShadow = true;
+        trampGroup.add(padMesh);
+
+        // Bold yellow bullseye ring
+        const bullseyeGeo = new THREE.RingGeometry(0.55, 0.88, 20);
+        const bullseyeMat = new THREE.MeshBasicMaterial({ color: 0xFACC15, side: THREE.DoubleSide });
+        const bullseye = new THREE.Mesh(bullseyeGeo, bullseyeMat);
+        bullseye.rotation.x = -Math.PI / 2;
+        bullseye.position.y = 0.89;
+        trampGroup.add(bullseye);
+
+        // Red center target star
+        const starGeo = new THREE.CircleGeometry(0.32, 16);
+        const starMat = new THREE.MeshBasicMaterial({ color: 0xEF4444, side: THREE.DoubleSide });
+        const star = new THREE.Mesh(starGeo, starMat);
+        star.rotation.x = -Math.PI / 2;
+        star.position.y = 0.90;
+        trampGroup.add(star);
+
+        // Upward bounce chevrons (^ ^ ^) in bright white
+        const chevronMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, side: THREE.DoubleSide });
+        [-0.2, 0.0, 0.2].forEach((cz) => {
+            const arm1 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
+            arm1.rotation.x = -Math.PI / 2;
+            arm1.rotation.z = Math.PI / 4;
+            arm1.position.set(-0.07, 0.91, cz);
+            trampGroup.add(arm1);
+
+            const arm2 = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), chevronMat);
+            arm2.rotation.x = -Math.PI / 2;
+            arm2.rotation.z = -Math.PI / 4;
+            arm2.position.set(0.07, 0.91, cz);
+            trampGroup.add(arm2);
+        });
+
+        this.scene.add(trampGroup);
+        this.trampolines.push({
+            mesh: trampGroup,
+            basePosition: pos.clone(),
+            springMesh: springGroup,
+            cooldown: 0,
+            launch,
+            isVertical,
+            hasAwardedScore: false
+        });
+    }
+
+    private spawnSpikeCluster(pos: THREE.Vector3): void {
+        const spikeGroup = new THREE.Group();
+        spikeGroup.position.copy(pos);
+
+        // Dark bedrock crystal socket embedded flush into platform
+        const socketGeo = new THREE.CylinderGeometry(1.2, 1.3, 0.16, 12);
+        const socketMat = new THREE.MeshStandardMaterial({
+            color: 0x1E293B, // Dark slate bedrock
+            roughness: 0.85,
+            metalness: 0.3,
+            flatShading: true
+        });
+        const socketMesh = new THREE.Mesh(socketGeo, socketMat);
+        socketMesh.position.y = 0.05;
+        socketMesh.receiveShadow = true;
+        spikeGroup.add(socketMesh);
+
+        // Jagged faceted red geometric crystal shards
+        const crystalConfigs = [
+            { x: 0, z: 0, sx: 0.85, sy: 3.2, sz: 0.85, y: 0.9, rx: 0.05, rz: -0.05 },
+            { x: -0.42, z: -0.32, sx: 0.65, sy: 2.5, sz: 0.65, y: 0.7, rx: -0.2, rz: 0.15 },
+            { x: 0.42, z: -0.32, sx: 0.7, sy: 2.6, sz: 0.7, y: 0.75, rx: -0.15, rz: -0.2 },
+            { x: -0.32, z: 0.42, sx: 0.6, sy: 2.0, sz: 0.6, y: 0.6, rx: 0.2, rz: 0.12 },
+            { x: 0.35, z: 0.38, sx: 0.62, sy: 2.2, sz: 0.62, y: 0.65, rx: 0.18, rz: -0.15 },
+        ];
+
+        const crystalMat = new THREE.MeshStandardMaterial({
+            color: 0xDC2626,
+            roughness: 0.08,
+            metalness: 0.4,
+            emissive: 0x991B1B,
+            emissiveIntensity: 0.7,
+            flatShading: true
+        });
+
+        crystalConfigs.forEach(cc => {
+            const octGeo = new THREE.OctahedronGeometry(0.35, 0);
+            const shard = new THREE.Mesh(octGeo, crystalMat);
+            shard.scale.set(cc.sx, cc.sy, cc.sz);
+            shard.position.set(cc.x, cc.y, cc.z);
+            shard.rotation.x = cc.rx;
+            shard.rotation.z = cc.rz;
+            shard.castShadow = true;
+            spikeGroup.add(shard);
+        });
+
+        this.scene.add(spikeGroup);
+        this.spikes.push({ mesh: spikeGroup, position: pos.clone() });
+    }
+
     /** Wire the gameplay layer to the world-forger's authored route. */
     private buildForgedCourse(): void {
         const gameData = this.engine?.getGameData?.();
         const route = forgedPathFeature(gameData);
-        const routePoints = route?.points ?? [];
-        const features = forgedFeatures(gameData);
+        let routePoints = route?.points ?? [];
 
-        // The forger validates these points against its movement contract. Place
-        // rings on the safe route rather than guessing independent coordinates.
-        const ringCount = Math.min(12, Math.max(5, Math.floor(routePoints.length / 12)));
-        for (let index = 1; index <= ringCount; index++) {
-            const point = routePoints[Math.round((routePoints.length - 1) * index / (ringCount + 1))];
-            if (!point) continue;
-            const ringPosition = new THREE.Vector3(point.x, point.y + 1.45, point.z);
+        // Guaranteed fallback route coordinates if features array was omitted
+        if (routePoints.length === 0) {
+            routePoints = [
+                { x: 50.0, y: 66.5, z: 50.0 },
+                { x: 82.2, y: 3.0, z: 81.4 },
+                { x: 115.4, y: 58.3, z: 64.4 },
+                { x: 136.6, y: 67.3, z: 88.2 },
+                { x: 172.1, y: 12.1, z: 117.0 },
+                { x: 203.4, y: 70.0, z: 144.5 },
+                { x: 182.8, y: 75.0, z: 147.8 },
+                { x: 134.8, y: 63.0, z: 172.6 },
+                { x: 138.4, y: 64.4, z: 220.9 },
+                { x: 109.2, y: 75.3, z: 226.9 },
+                { x: 156.2, y: 3.0, z: 214.1 },
+                { x: 194.0, y: 36.3, z: 217.4 },
+                { x: 208.3, y: 76.0, z: 245.6 },
+                { x: 239.6, y: 3.1, z: 275.3 },
+                { x: 278.2, y: 75.8, z: 264.0 },
+                { x: 272.4, y: 83.9, z: 283.2 }
+            ];
+        }
+
+        // 1. Build 12 Golden Hoops along the full 1,079m continuous trail
+        const totalHoops = 12;
+        this.rings = [];
+        for (let i = 1; i <= totalHoops; i++) {
+            const frac = i / (totalHoops + 0.5);
+            const idx = Math.min(routePoints.length - 1, Math.max(1, Math.floor(frac * routePoints.length)));
+            const pt = routePoints[idx]!;
+            const prevPt = routePoints[Math.max(0, idx - 1)]!;
+            const nextPt = routePoints[Math.min(routePoints.length - 1, idx + 1)]!;
+
+            const ringPos = new THREE.Vector3(pt.x, pt.y + 1.8, pt.z);
+            const dir = new THREE.Vector3(nextPt.x - prevPt.x, 0, nextPt.z - prevPt.z).normalize();
+            if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+
             const ringMesh = new THREE.Mesh(
-                new THREE.TorusGeometry(1.4, 0.22, 6, 16),
+                new THREE.TorusGeometry(1.4, 0.22, 8, 24),
                 new THREE.MeshStandardMaterial({
                     color: 0xFBBF24,
-                    metalness: 0.9,
+                    metalness: 0.92,
                     roughness: 0.16,
                     flatShading: true,
                     emissive: 0xB45309,
-                    emissiveIntensity: 0.65
+                    emissiveIntensity: 0.75
                 })
             );
-            ringMesh.position.copy(ringPosition);
-            ringMesh.name = `ForgedGoldenHoop_${index}`;
-            const ringLight = new THREE.PointLight(0xFBBF24, 2.5, 8);
-            ringLight.position.copy(ringPosition);
+            ringMesh.position.copy(ringPos);
+            ringMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+            ringMesh.name = `ForgedGoldenHoop_${i}`;
+
+            const ringLight = new THREE.PointLight(0xFBBF24, 2.5, 9);
+            ringLight.position.copy(ringPos);
             this.scene.add(ringMesh, ringLight);
             this.rings.push({ mesh: ringMesh, collected: false, light: ringLight });
         }
         this.totalRings = this.rings.length;
 
-        this.forgedCheckpoints = features
-            .filter(feature => feature.kind?.toLowerCase() === 'checkpoint')
-            .flatMap(feature => feature.points ?? [])
-            .map(point => new THREE.Vector3(point.x, point.y, point.z));
-        this.forgedFallY = routePoints.length
-            ? Math.min(...routePoints.map(point => point.y)) - 25
-            : this.spawnCheckpoint.y - 40;
+        // 2. Build 4 Spring Trampolines across key elevation jumps
+        const trampConfigs = [
+            { pos: new THREE.Vector3(82.0, 3.0, 78.0), launch: new THREE.Vector3(14.0, 36.0, -8.0), isVertical: false },
+            { pos: new THREE.Vector3(165.0, 12.0, 115.0), launch: new THREE.Vector3(16.0, 38.0, 16.0), isVertical: false },
+            { pos: new THREE.Vector3(148.0, 8.0, 212.0), launch: new THREE.Vector3(18.0, 39.0, 12.0), isVertical: false },
+            { pos: new THREE.Vector3(236.0, 3.5, 272.0), launch: new THREE.Vector3(16.0, 42.0, 5.0), isVertical: false },
+        ];
+        trampConfigs.forEach(cfg => {
+            this.spawnTrampoline(cfg.pos, cfg.launch, cfg.isVertical);
+        });
 
-        const portal = findForgedFeature(gameData, { kind: 'portalGoal' });
-        const portalPoint = portal?.points?.[0];
-        if (portalPoint) {
-            const portalGroup = new THREE.Group();
-            portalGroup.name = 'ForgedPortalGoalTrigger';
-            portalGroup.position.set(portalPoint.x, portalPoint.y + 1.5, portalPoint.z);
-            const portalLight = new THREE.PointLight(0x00FFFF, 0, 30);
-            portalGroup.add(portalLight);
-            this.scene.add(portalGroup);
-            this.exitPortal = { group: portalGroup, unlocked: false, light: portalLight };
-        }
+        // 3. Build Ruby Crystal Spike Hazards guarding treacherous turns
+        const hazardConfigs = [
+            new THREE.Vector3(124.0, 68.0, 86.0),
+            new THREE.Vector3(142.0, 64.0, 178.0),
+            new THREE.Vector3(204.0, 77.0, 244.0),
+        ];
+        hazardConfigs.forEach(pos => {
+            this.spawnSpikeCluster(pos);
+        });
 
+        // 4. Build Checkpoints with glowing cyan rings & vertical light beacons
+        this.forgedCheckpoints = [
+            new THREE.Vector3(185.0, 75.0, 145.0), // Checkpoint 1: Terrace Isle
+            new THREE.Vector3(200.0, 81.0, 240.0), // Checkpoint 2: Crystal Ridge
+        ];
+        this.forgedCheckpoints.forEach((cpPos) => {
+            const cpGroup = new THREE.Group();
+            cpGroup.position.copy(cpPos);
+
+            const ringGeo = new THREE.RingGeometry(2.0, 2.5, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, side: THREE.DoubleSide });
+            const groundRing = new THREE.Mesh(ringGeo, ringMat);
+            groundRing.rotation.x = -Math.PI / 2;
+            groundRing.position.y = 0.05;
+            cpGroup.add(groundRing);
+
+            const beaconLight = new THREE.PointLight(0x38BDF8, 3.0, 15);
+            beaconLight.position.y = 2.0;
+            cpGroup.add(beaconLight);
+
+            this.scene.add(cpGroup);
+        });
+
+        // 5. Build Summit Sky Portal
+        const portalPos = new THREE.Vector3(272.0, 84.0, 284.0);
+        const portalGroup = new THREE.Group();
+        portalGroup.name = 'ForgedPortalGoalTrigger';
+        portalGroup.position.copy(portalPos);
+
+        const archGeo = new THREE.TorusGeometry(3.5, 0.45, 12, 28, Math.PI);
+        const archMat = new THREE.MeshStandardMaterial({
+            color: 0x1E293B,
+            metalness: 0.8,
+            roughness: 0.35,
+            flatShading: true
+        });
+        const archMesh = new THREE.Mesh(archGeo, archMat);
+        archMesh.rotation.z = 0;
+        archMesh.position.y = 0;
+        portalGroup.add(archMesh);
+
+        const diskGeo = new THREE.CircleGeometry(2.8, 32);
+        const diskMat = new THREE.MeshBasicMaterial({
+            color: 0xEF4444, // Locked red until all 12 hoops are collected
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.75
+        });
+        const diskMesh = new THREE.Mesh(diskGeo, diskMat);
+        diskMesh.name = 'portal_energy_disk';
+        portalGroup.add(diskMesh);
+
+        const portalLight = new THREE.PointLight(0xEF4444, 4.0, 30);
+        portalGroup.add(portalLight);
+        this.scene.add(portalGroup);
+        this.exitPortal = { group: portalGroup, unlocked: false, light: portalLight };
+
+        this.forgedFallY = -15.0; // Abyss below lowest island
         this.updateRingsDisplay();
-        console.log(`🔴 Forged course ready: ${this.totalRings} hoops, ${this.forgedCheckpoints.length} checkpoints`);
+        console.log(`🔴 Forged course ready: ${this.totalRings} hoops, ${this.trampolines.length} trampolines, ${this.spikes.length} hazards, ${this.forgedCheckpoints.length} checkpoints!`);
     }
 
     public update(deltaTime: number): void {
@@ -1759,15 +1859,9 @@ export class BounceCourseManager {
                     // Safe Landing Touchdown after Trampoline launch
                     if (this.trampolineFlightTimer > 0) {
                         this.trampolineFlightTimer -= deltaTime;
-                        if (isGroundedNow && vy <= 0.5 && this.trampolineFlightTimer < 1.2) {
-                            const ms = this.playerController?.getMovementSystem?.() as any;
-                            if (ms) {
-                                const hSpeed = Math.hypot(ms.horizVelX, ms.horizVelZ);
-                                if (hSpeed > 8.0) {
-                                    const damping = 7.5 / hSpeed;
-                                    ms.horizVelX *= damping;
-                                    ms.horizVelZ *= damping;
-                                }
+                        if (isGroundedNow && vy <= 0.5 && this.trampolineFlightTimer < 1.4) {
+                            if (this.playerController && typeof this.playerController.applyHorizontalDamping === 'function') {
+                                this.playerController.applyHorizontalDamping(8.0);
                             }
                             this.trampolineFlightTimer = 0;
                             this.ballScale.set(1.4, 0.55, 1.4); // Satisfying rubber landing compression
@@ -1784,11 +1878,8 @@ export class BounceCourseManager {
                         // Elastic Rubber Ball Restitution: natural rebound bounce ONLY when holding jump
                         const isJumpHeld = Boolean(this.playerController?.keys?.ascend);
                         if (isJumpHeld && impactSpeed > 3.0) {
-                            const reboundY = Math.min(11.0, impactSpeed * 0.52);
-                            const ms = this.playerController?.getMovementSystem?.() as any;
-                            if (ms && typeof ms.applyImpulse === 'function') {
-                                ms.applyImpulse({ x: 0, y: reboundY, z: 0 });
-                            } else if (this.playerController && typeof this.playerController.applyKnockback === 'function') {
+                            const reboundY = Math.min(13.0, impactSpeed * 0.55);
+                            if (this.playerController && typeof this.playerController.applyKnockback === 'function') {
                                 this.playerController.applyKnockback(0, 0, reboundY);
                             }
                             this.ballScale.set(1.35, 0.60, 1.35);
@@ -1847,15 +1938,16 @@ export class BounceCourseManager {
             if (!ring.collected) {
                 ring.mesh.rotation.y += deltaTime * 2.2;
 
-                // Check distance (1.7m radius)
-                if (playerPos.distanceTo(ring.mesh.position) < 1.7) {
+                // Check distance (1.85m collection radius)
+                if (playerPos.distanceTo(ring.mesh.position) < 1.85) {
                     ring.collected = true;
                     this.ringsCollected++;
                     this.playChime();
+                    this.playerController?.triggerHaptic?.([40, 30, 60]);
                     this.addScore(500, '+500 GOLDEN HOOP!');
                     this.updateRingsDisplay();
 
-                    if (ring.light) ring.light.intensity = 4.0;
+                    if (ring.light) ring.light.intensity = 4.5;
                     this.animatingRings.push({ mesh: ring.mesh, light: ring.light, elapsed: 0 });
 
                     // Check if all hoops collected to unlock portal
@@ -1895,13 +1987,14 @@ export class BounceCourseManager {
             const curVel = body?.linvel ? body.linvel() : { x: 0, y: 0, z: 0 };
 
             // Pad radius is 1.26m; requires downward landing/contact directly on pad surface
-            if (horizDist <= 1.35 && vertOffset >= 0.4 && vertOffset <= 1.5 && curVel.y <= 1.5 && tramp.cooldown <= 0) {
-                tramp.cooldown = 0.35;
-                this.trampolineFlightTimer = 1.6; // Engage safe landing absorption on touchdown
+            if (horizDist <= 1.40 && vertOffset >= 0.35 && vertOffset <= 1.6 && curVel.y <= 1.5 && tramp.cooldown <= 0) {
+                tramp.cooldown = 0.40;
+                this.trampolineFlightTimer = 1.8; // Engage safe landing absorption on touchdown
                 this.playBoing();
+                this.playerController?.triggerHaptic?.(60);
                 this.ballScale.set(1.45, 0.52, 1.45); // Juicy impact squash
 
-                // Anti-farming: award large score on initial launch, preventing infinite score looping
+                // Anti-farming: award score on initial launch
                 if (!tramp.hasAwardedScore) {
                     tramp.hasAwardedScore = true;
                     this.addScore(250, '+250 MEGA BOUNCE!');
@@ -1913,36 +2006,33 @@ export class BounceCourseManager {
                     tramp.springMesh.scale.set(1.0, 1.0, 1.0);
                 }, 160);
 
-                // Apply trajectory launch impulse via kinematic motor knockback
-                const ms = this.playerController?.getMovementSystem?.() as any;
-                const curHorizX = ms?.horizVelX ?? 0;
-                const curHorizZ = ms?.horizVelZ ?? 0;
-                const targetVx = tramp.isVertical ? curHorizX * 0.5 : tramp.launch.x;
-                const targetVz = tramp.isVertical ? curHorizZ * 0.5 : tramp.launch.z;
+                // Apply trajectory launch impulse via clean public API
+                const targetVx = tramp.isVertical ? 0 : tramp.launch.x;
+                const targetVz = tramp.isVertical ? 0 : tramp.launch.z;
                 const targetVy = tramp.launch.y;
 
-                if (ms && typeof ms.applyImpulse === 'function') {
-                    ms.applyImpulse({
-                        x: targetVx - curHorizX,
-                        y: targetVy,
-                        z: targetVz - curHorizZ
-                    });
+                if (this.playerController && typeof this.playerController.launch === 'function') {
+                    this.playerController.launch({ x: targetVx, y: targetVy, z: targetVz });
                 } else if (this.playerController && typeof this.playerController.applyKnockback === 'function') {
-                    this.playerController.applyKnockback(targetVx - curHorizX, targetVz - curHorizZ, targetVy);
+                    this.playerController.applyKnockback(targetVx, targetVz, targetVy);
                 }
             }
         });
 
-        // 2b. Checkpoints. Forged levels supply their route locations directly;
-        // the legacy course retains its hand-authored islands.
+        // 2b. Checkpoints. Forged levels supply multiple terrace locations
         if (this.usesForgedLevel) {
-            const nextCheckpoint = this.forgedCheckpoints[this.checkpointIndex];
-            if (nextCheckpoint && playerPos.distanceTo(nextCheckpoint) < 4.5) {
-                this.checkpointIndex++;
-                this.spawnCheckpoint.copy(this.getPhysicsPosition());
-                this.playChime();
-                this.addScore(1000, `+1,000 CHECKPOINT ${this.checkpointIndex}!`);
-                this.showToast(`🏁 CHECKPOINT ${this.checkpointIndex} REACHED!`, '#38BDF8');
+            for (let cpIdx = 0; cpIdx < this.forgedCheckpoints.length; cpIdx++) {
+                if (this.checkpointIndex <= cpIdx) {
+                    const cp = this.forgedCheckpoints[cpIdx];
+                    if (cp && playerPos.distanceTo(cp) < 5.0) {
+                        this.checkpointIndex = cpIdx + 1;
+                        this.spawnCheckpoint.copy(this.getPhysicsPosition());
+                        this.playChime();
+                        this.playerController?.triggerHaptic?.(80);
+                        this.addScore(1000, `+1,000 CHECKPOINT ${this.checkpointIndex}!`);
+                        this.showToast(`🏁 CHECKPOINT ${this.checkpointIndex} REACHED!`, '#38BDF8');
+                    }
+                }
             }
         } else if (this.checkpointIndex < 1) {
             const distIsland2 = Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0));
@@ -2022,14 +2112,19 @@ export class BounceCourseManager {
 
     private handlePlayerPop(): void {
         this.playPop();
+        this.playerController?.triggerHaptic?.([100, 50, 100]);
         // Popping penalty to introduce real stakes (score floors at 0)
         this.score = Math.max(0, this.score - 250);
         this.updateScoreDisplay();
         this.showToast('💥 POPPED! -250 PTS · RESPAWNING...', '#EF4444');
 
-        const ms = this.playerController?.getMovementSystem?.() as any;
-        if (ms && typeof ms.reset === 'function') {
-            ms.reset();
+        if (this.playerController && typeof this.playerController.resetMotion === 'function') {
+            this.playerController.resetMotion();
+        } else {
+            const ms = this.playerController?.getMovementSystem?.() as any;
+            if (ms && typeof ms.reset === 'function') {
+                ms.reset();
+            }
         }
         this.trampolineFlightTimer = 0;
         if (this.playerController && typeof this.playerController.teleportTo === 'function') {
@@ -2047,9 +2142,7 @@ export class BounceCourseManager {
                 body.setLinvel({ x: 0, y: 0, z: 0 }, true);
             }
         }
-        if (!this.usesForgedLevel) {
-            this.player.position.copy(this.spawnCheckpoint);
-        }
+        this.player.position.copy(this.spawnCheckpoint);
         if (this.ballVisual) {
             this.ballVisual.position.copy(this.getBallPosition());
         }
@@ -2063,6 +2156,7 @@ export class BounceCourseManager {
     private triggerVictory(): void {
         this.isWon = true;
         this.playVictory();
+        this.playerController?.triggerHaptic?.([80, 40, 80, 40, 160]);
 
         // Speedrun time bonus (up to 10,000 points)
         const timeBonus = Math.max(500, Math.floor(10000 - this.gameTime * 50));
