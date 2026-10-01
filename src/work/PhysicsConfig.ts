@@ -53,9 +53,9 @@ export interface PhysicsConstants {
 export const DEFAULT_PHYSICS: PhysicsConstants = {
     gravity: -34.0,            // Buoyant bouncy arcade gravity
     terminalVelocity: 55.0,
-    jumpHeight: 3.2,           // Accurate 3.2m jump apex
-    airControlMultiplier: 0.95, // Responsive in-air steering control
-    groundFriction: 0.96,      // Smooth rolling momentum
+    jumpHeight: 4.2,           // Satisfying springy arcade jump (~3.15m apex)
+    airControlMultiplier: 0.98, // Fluid responsive in-air steering
+    groundFriction: 0.94,      // Crisp rolling traction and nimble stopping
     airFriction: 0.99
 };
 

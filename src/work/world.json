@@ -18,9 +18,9 @@
     "voxelBlockSize": 1,
     "characterConfig": {
       "height": 1.5,
-      "walkSpeed": 3.5,
-      "runSpeed": 8,
-      "fastRunSpeed": 12
+      "walkSpeed": 4.0,
+      "runSpeed": 9.5,
+      "fastRunSpeed": 13.0
     },
     "markers": [],
     "terrain": {

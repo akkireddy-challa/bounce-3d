@@ -58,6 +58,7 @@ export class BounceCourseManager {
     private shadowMesh: THREE.Mesh | null = null;
     private squishWobbleTimer: number = 0;
     private wasGrounded: boolean = true;
+    private trampolineFlightTimer: number = 0;
     private sparklePool: THREE.Mesh[] = [];
     private activeSparkles: { mesh: THREE.Mesh; life: number; maxLife: number }[] = [];
 
@@ -515,8 +516,15 @@ export class BounceCourseManager {
         // Clear any in-flight ring animations
         this.animatingRings = [];
 
-        // Teleport player back to Spawn Island
-        if (this.playerController?.playerBody) {
+        // Reset kinematic motor velocity and teleport player back to Spawn Island
+        const ms = this.playerController?.getMovementSystem?.() as any;
+        if (ms && typeof ms.reset === 'function') {
+            ms.reset();
+        }
+        this.trampolineFlightTimer = 0;
+        if (this.playerController && typeof this.playerController.teleportTo === 'function') {
+            this.playerController.teleportTo(this.spawnCheckpoint.x, this.spawnCheckpoint.y, this.spawnCheckpoint.z);
+        } else if (this.playerController?.playerBody) {
             const body = this.playerController.playerBody;
             if (typeof body.setTranslation === 'function') {
                 body.setTranslation({
@@ -758,7 +766,127 @@ export class BounceCourseManager {
             }
         });
 
-        // 1b. Floating Satellite Rock Chunks Drifting around Islands (Reference Artwork)
+        // 1b. Seamless Connecting Stone Bridges / Raised Pathways (Wallpaper Reference Artwork)
+        const bridgeSegments = [
+            // Bridge 1: Emerald Spawn Island to Azure Sky Terrace
+            {
+                points: [
+                    new THREE.Vector3(1.5, 4.0, -6.5),
+                    new THREE.Vector3(4.2, 4.3, -9.8),
+                    new THREE.Vector3(6.8, 4.7, -13.0),
+                    new THREE.Vector3(9.2, 5.1, -15.5)
+                ],
+                width: 3.6,
+                deckColor: 0x10B981,
+                curbColor: 0xFBBF24
+            },
+            // Bridge 2: Azure Sky Terrace to Amethyst Pinnacle (Sweeping Mid-Sky Arch beneath Hoop 4)
+            {
+                points: [
+                    new THREE.Vector3(8.0, 5.1, -21.0),
+                    new THREE.Vector3(3.5, 5.6, -23.5),
+                    new THREE.Vector3(-1.8, 6.1, -25.2),
+                    new THREE.Vector3(-7.2, 6.7, -27.5)
+                ],
+                width: 3.6,
+                deckColor: 0x0284C7,
+                curbColor: 0x38BDF8
+            },
+            // Bridge 3: Amethyst Pinnacle to Golden Citadel Base Promenade
+            {
+                points: [
+                    new THREE.Vector3(-7.5, 6.7, -33.0),
+                    new THREE.Vector3(-4.5, 7.3, -36.2),
+                    new THREE.Vector3(-1.8, 8.0, -39.0),
+                    new THREE.Vector3(0.0, 8.5, -40.5)
+                ],
+                width: 4.0,
+                deckColor: 0x7C3AED,
+                curbColor: 0xC084FC
+            }
+        ];
+
+        bridgeSegments.forEach(bridge => {
+            for (let i = 0; i < bridge.points.length - 1; i++) {
+                const pA = bridge.points[i];
+                const pB = bridge.points[i + 1];
+                if (!pA || !pB) continue;
+                const mid = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+                const delta = new THREE.Vector3().subVectors(pB, pA);
+                const segLen = delta.length();
+                const dir = delta.clone().normalize();
+
+                const segGroup = new THREE.Group();
+                segGroup.position.copy(mid);
+
+                // Calculate orientation quaternion aligning Z with direction
+                const segQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+                segGroup.quaternion.copy(segQuat);
+
+                // 1. Grassy bridge surface deck
+                const deckGeo = new THREE.BoxGeometry(bridge.width, 0.35, segLen * 1.04);
+                const deckMat = new THREE.MeshStandardMaterial({
+                    color: bridge.deckColor,
+                    roughness: 0.45,
+                    metalness: 0.1,
+                    flatShading: true
+                });
+                const deckMesh = new THREE.Mesh(deckGeo, deckMat);
+                deckMesh.position.y = 0.12;
+                deckMesh.receiveShadow = true;
+                segGroup.add(deckMesh);
+
+                // 2. Beveled stone bedrock keel underneath
+                const keelGeo = new THREE.BoxGeometry(bridge.width * 0.92, 1.2, segLen * 1.04);
+                const keelMat = new THREE.MeshStandardMaterial({
+                    color: 0x475569,
+                    roughness: 0.85,
+                    metalness: 0.2,
+                    flatShading: true
+                });
+                const keelMesh = new THREE.Mesh(keelGeo, keelMat);
+                keelMesh.position.y = -0.6;
+                segGroup.add(keelMesh);
+
+                // 3. Tactile stone safety curbs on left and right sides
+                const curbGeo = new THREE.BoxGeometry(0.35, 0.38, segLen * 1.04);
+                const curbMat = new THREE.MeshStandardMaterial({
+                    color: bridge.curbColor || 0xFBBF24,
+                    roughness: 0.3,
+                    metalness: 0.6,
+                    flatShading: true
+                });
+                const leftCurb = new THREE.Mesh(curbGeo, curbMat);
+                leftCurb.position.set(-bridge.width * 0.5 + 0.17, 0.35, 0);
+                segGroup.add(leftCurb);
+
+                const rightCurb = new THREE.Mesh(curbGeo, curbMat);
+                rightCurb.position.set(bridge.width * 0.5 - 0.17, 0.35, 0);
+                segGroup.add(rightCurb);
+
+                this.scene.add(segGroup);
+                this.sceneryObjects.push(segGroup);
+
+                // Rapier physics collider for bridge segment
+                if (this.engine?.physicsWorld && RAPIER) {
+                    try {
+                        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+                            .setTranslation(mid.x, mid.y + 0.12, mid.z)
+                            .setRotation({ x: segQuat.x, y: segQuat.y, z: segQuat.z, w: segQuat.w });
+                        const body = this.engine.physicsWorld.createRigidBody(bodyDesc);
+                        const colDesc = RAPIER.ColliderDesc.cuboid(bridge.width * 0.5, 0.25, (segLen * 1.04) * 0.5)
+                            .setFriction(0.9)
+                            .setCollisionGroups(makeCollisionGroups(CollisionGroup.ENVIRONMENT, CollisionMask.ENVIRONMENT));
+                        this.engine.physicsWorld.createCollider(colDesc, body);
+                        this.physicsBodies.push(body);
+                    } catch (e) {
+                        console.warn('Bridge physics collider warning:', e);
+                    }
+                }
+            }
+        });
+
+        // 1c. Floating Satellite Rock Chunks Drifting around Islands (Reference Artwork)
         const satelliteRockConfigs = [
             { pos: new THREE.Vector3(-7.5, 4.8, 2.0), scale: new THREE.Vector3(1.1, 0.8, 0.9), color: 0x64748B },
             { pos: new THREE.Vector3(7.2, 5.2, -4.5), scale: new THREE.Vector3(0.9, 1.2, 0.8), color: 0x475569 },
@@ -1145,13 +1273,13 @@ export class BounceCourseManager {
     private buildObstacleCourse(): void {
         console.log('🔴 Building Bounce 3D Course elevated on floating islands...');
 
-        // 1. Five Golden Hoops spatially separated across the course without 2D overlap
+        // 1. Five Golden Hoops spatially separated across the course matching launch trajectories & bridges
         const hoopPositions = [
-            new THREE.Vector3(0, 5.0, -4.5),       // Hoop 1: foreground center on spawn island
-            new THREE.Vector3(7.2, 9.8, -11.5),    // Hoop 2: parabolic apex of Trampoline 2 launch to Azure Terrace
-            new THREE.Vector3(10.5, 6.6, -17.0),   // Hoop 3: soaring over Azure Terrace (far right)
-            new THREE.Vector3(-1.5, 12.0, -24.8),  // Hoop 4: soaring arc of Trampoline 3 to Amethyst Pinnacle
-            new THREE.Vector3(0, 10.4, -38.5),     // Hoop 5: gateway before Citadel Exit Portal (high center)
+            new THREE.Vector3(0, 4.8, -4.2),        // Hoop 1: foreground center on spawn island path
+            new THREE.Vector3(7.5, 9.8, -12.0),     // Hoop 2: exact parabolic apex of Trampoline 2 launch to Azure Terrace
+            new THREE.Vector3(10.5, 6.4, -17.0),    // Hoop 3: soaring over Azure Terrace center
+            new THREE.Vector3(-1.75, 12.2, -24.8),  // Hoop 4: soaring arc of Trampoline 3 / above Bridge 2
+            new THREE.Vector3(0, 9.8, -38.5),       // Hoop 5: gateway arch before ancient Citadel stairs
         ];
 
         hoopPositions.forEach((pos, idx) => {
@@ -1182,10 +1310,10 @@ export class BounceCourseManager {
 
         // 2. Coiled Steel Spring Trampolines with Beveled Yellow Collar & Dark Rubber Pad (Reference Artwork)
         const trampolineConfigs = [
-            { pos: new THREE.Vector3(-2.4, 4.0, -1.8), launch: new THREE.Vector3(0, 21.0, 0), isVertical: true },   // Trampoline 1: Foreground vertical super leap
-            { pos: new THREE.Vector3(2.5, 4.0, -5.5), launch: new THREE.Vector3(8.5, 20.0, -11.0), isVertical: false }, // Trampoline 2: Launch to Azure Terrace
-            { pos: new THREE.Vector3(9.5, 5.1, -19.5), launch: new THREE.Vector3(-17.0, 22.5, -8.0), isVertical: false }, // Trampoline 3: Launch to Amethyst Pinnacle
-            { pos: new THREE.Vector3(-9.5, 6.7, -31.5), launch: new THREE.Vector3(8.5, 21.0, -9.5), isVertical: false }, // Trampoline 4: Launch to Golden Citadel
+            { pos: new THREE.Vector3(-2.4, 4.0, -1.8), launch: new THREE.Vector3(0, 21.0, 0), isVertical: true },     // Trampoline 1: Foreground vertical super leap
+            { pos: new THREE.Vector3(2.5, 4.0, -5.5), launch: new THREE.Vector3(8.5, 20.0, -11.0), isVertical: false }, // Trampoline 2: Launch to Azure Terrace through Hoop 2
+            { pos: new THREE.Vector3(9.5, 5.1, -19.5), launch: new THREE.Vector3(-16.0, 22.0, -8.0), isVertical: false }, // Trampoline 3: Launch to Amethyst Pinnacle through Hoop 4
+            { pos: new THREE.Vector3(-9.5, 6.7, -31.5), launch: new THREE.Vector3(8.5, 21.0, -9.5), isVertical: false },  // Trampoline 4: Launch to Golden Citadel
         ];
 
         trampolineConfigs.forEach((cfg) => {
@@ -1554,26 +1682,50 @@ export class BounceCourseManager {
 
         const playerPos = this.getBallPosition();
 
-        // Calculate ground elevation beneath the player (actual top grass surface)
+        // Calculate ground elevation beneath the player (actual top grass surface of islands & bridges)
         let groundY = 0.5; // Water base
-        if (this.usesForgedLevel) {
-            groundY = this.engine?.getWorldHeightAt?.(playerPos.x, playerPos.z) ?? playerPos.y - this.ballRadius;
-        } else if (Math.hypot(playerPos.x - 0, playerPos.z - (-1.0)) < 6.8) groundY = 4.0;
-        else if (Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0)) < 5.6) groundY = 5.1;
-        else if (Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0)) < 5.6) groundY = 6.7;
-        else if (Math.hypot(playerPos.x - 0, playerPos.z - (-42.0)) < 7.6) groundY = 8.5;
+        if (this.playerController?.isGrounded && typeof this.playerController.getGroundPosition === 'function') {
+            const gp = this.playerController.getGroundPosition();
+            groundY = gp.y;
+        } else {
+            // Continuous ground surface query based on islands & bridges
+            if (Math.hypot(playerPos.x - 0, playerPos.z - (-1.0)) < 7.0) groundY = 4.0;
+            else if (Math.hypot(playerPos.x - 10.5, playerPos.z - (-17.0)) < 5.8) groundY = 5.1;
+            else if (Math.hypot(playerPos.x - (-10.5), playerPos.z - (-29.0)) < 5.8) groundY = 6.7;
+            else if (Math.hypot(playerPos.x - 0, playerPos.z - (-42.0)) < 8.0) groundY = 8.5;
+            // Bridge 1 (z between -6.0 and -14.5)
+            else if (playerPos.z >= -15.0 && playerPos.z <= -6.0 && playerPos.x >= 0.5 && playerPos.x <= 10.5) {
+                const t = Math.max(0, Math.min(1, (playerPos.z - (-6.0)) / (-14.5 - (-6.0))));
+                groundY = 4.0 + (5.1 - 4.0) * t;
+            }
+            // Bridge 2 (z between -20.5 and -27.5)
+            else if (playerPos.z >= -28.0 && playerPos.z <= -20.5 && playerPos.x >= -8.0 && playerPos.x <= 8.5) {
+                const t = Math.max(0, Math.min(1, (playerPos.z - (-20.5)) / (-27.5 - (-20.5))));
+                groundY = 5.1 + (6.7 - 5.1) * t;
+            }
+            // Bridge 3 (z between -32.5 and -40.5)
+            else if (playerPos.z >= -41.0 && playerPos.z <= -32.5 && playerPos.x >= -8.0 && playerPos.x <= 1.0) {
+                const t = Math.max(0, Math.min(1, (playerPos.z - (-32.5)) / (-40.5 - (-32.5))));
+                groundY = 6.7 + (8.5 - 6.7) * t;
+            }
+        }
 
         // Dynamic Drop Shadow Projection right on top of the grass surface
         if (this.shadowMesh) {
             this.shadowMesh.position.set(playerPos.x, groundY + 0.02, playerPos.z);
             const ballBottom = playerPos.y - this.ballRadius;
             const heightAboveGround = Math.max(0, ballBottom - groundY);
-            const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.08);
-            this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
-            (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.5 - heightAboveGround * 0.06);
+            if (heightAboveGround < 3.5) {
+                this.shadowMesh.visible = true;
+                const shadowScale = Math.max(0.35, 1.0 - heightAboveGround * 0.12);
+                this.shadowMesh.scale.set(shadowScale, shadowScale, shadowScale);
+                (this.shadowMesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.08, 0.52 - heightAboveGround * 0.12);
+            } else {
+                this.shadowMesh.visible = false;
+            }
         }
 
-        // 0. Update Red Ball Visual: Sync position, rolling rotation, squish/stretch, and idle breathing
+        // 0. Update Red Ball Visual: Sync position, true 3D rolling rotation, squish/stretch, and idle breathing
         if (this.ballVisual) {
             // Anchor ball bottom firmly to the ground surface even during squash & stretch
             const squashGroundAnchor = this.ballRadius * (1.0 - this.ballScale.y);
@@ -1583,9 +1735,14 @@ export class BounceCourseManager {
             if (this.ballInnerMesh && this.lastPlayerPos) {
                 const dx = playerPos.x - this.lastPlayerPos.x;
                 const dz = playerPos.z - this.lastPlayerPos.z;
-                // Smooth rolling along exact movement direction
-                this.ballInnerMesh.rotation.z -= dx * 2.0;
-                this.ballInnerMesh.rotation.x += dz * 2.0;
+                const moveDist = Math.hypot(dx, dz);
+                if (moveDist > 0.0008) {
+                    // Physical rolling axis perpendicular to displacement
+                    const rollAxis = new THREE.Vector3(-dz, 0, dx).normalize();
+                    const rollAngle = moveDist / this.ballRadius;
+                    const deltaQuat = new THREE.Quaternion().setFromAxisAngle(rollAxis, rollAngle);
+                    this.ballInnerMesh.quaternion.premultiply(deltaQuat);
+                }
             }
             this.lastPlayerPos.copy(playerPos);
 
@@ -1599,16 +1756,35 @@ export class BounceCourseManager {
                     const heightAboveGround = Math.max(0, playerPos.y - groundY);
                     const isGroundedNow = Boolean(this.playerController?.isGrounded) || (heightAboveGround < 0.60);
 
+                    // Safe Landing Touchdown after Trampoline launch
+                    if (this.trampolineFlightTimer > 0) {
+                        this.trampolineFlightTimer -= deltaTime;
+                        if (isGroundedNow && vy <= 0.5 && this.trampolineFlightTimer < 1.2) {
+                            const ms = this.playerController?.getMovementSystem?.() as any;
+                            if (ms) {
+                                const hSpeed = Math.hypot(ms.horizVelX, ms.horizVelZ);
+                                if (hSpeed > 8.0) {
+                                    const damping = 7.5 / hSpeed;
+                                    ms.horizVelX *= damping;
+                                    ms.horizVelZ *= damping;
+                                }
+                            }
+                            this.trampolineFlightTimer = 0;
+                            this.ballScale.set(1.4, 0.55, 1.4); // Satisfying rubber landing compression
+                            this.playBounceThud(10.0);
+                        }
+                    }
+
                     // Landing impact detection: trigger rubber thud, elastic rebound bounce, and squash wobble
                     if (!this.wasGrounded && isGroundedNow && vy <= -1.8) {
                         const impactSpeed = Math.abs(vy);
                         this.squishWobbleTimer = 0.35;
                         this.playBounceThud(impactSpeed);
 
-                        // Elastic Rubber Ball Restitution: natural rebound bounce when holding jump or high drop
+                        // Elastic Rubber Ball Restitution: natural rebound bounce ONLY when holding jump
                         const isJumpHeld = Boolean(this.playerController?.keys?.ascend);
-                        if ((isJumpHeld && impactSpeed > 3.6) || impactSpeed > 13.0) {
-                            const reboundY = Math.min(13.0, impactSpeed * 0.55);
+                        if (isJumpHeld && impactSpeed > 3.0) {
+                            const reboundY = Math.min(11.0, impactSpeed * 0.52);
                             const ms = this.playerController?.getMovementSystem?.() as any;
                             if (ms && typeof ms.applyImpulse === 'function') {
                                 ms.applyImpulse({ x: 0, y: reboundY, z: 0 });
@@ -1721,6 +1897,7 @@ export class BounceCourseManager {
             // Pad radius is 1.26m; requires downward landing/contact directly on pad surface
             if (horizDist <= 1.35 && vertOffset >= 0.4 && vertOffset <= 1.5 && curVel.y <= 1.5 && tramp.cooldown <= 0) {
                 tramp.cooldown = 0.35;
+                this.trampolineFlightTimer = 1.6; // Engage safe landing absorption on touchdown
                 this.playBoing();
                 this.ballScale.set(1.45, 0.52, 1.45); // Juicy impact squash
 
@@ -1850,7 +2027,14 @@ export class BounceCourseManager {
         this.updateScoreDisplay();
         this.showToast('💥 POPPED! -250 PTS · RESPAWNING...', '#EF4444');
 
-        if (this.playerController?.playerBody) {
+        const ms = this.playerController?.getMovementSystem?.() as any;
+        if (ms && typeof ms.reset === 'function') {
+            ms.reset();
+        }
+        this.trampolineFlightTimer = 0;
+        if (this.playerController && typeof this.playerController.teleportTo === 'function') {
+            this.playerController.teleportTo(this.spawnCheckpoint.x, this.spawnCheckpoint.y, this.spawnCheckpoint.z);
+        } else if (this.playerController?.playerBody) {
             const body = this.playerController.playerBody;
             if (typeof body.setTranslation === 'function') {
                 body.setTranslation({
